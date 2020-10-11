@@ -8,6 +8,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/lexical_cast.hpp>
 
 #include "../libs/voro++-0.4.6/src/voro++.hh"
 #include "../lib/lib_vec.hpp"
@@ -51,7 +52,17 @@ class Voronoi
   // contains all finite element node ids that belong to vertex
   std::vector<std::vector<unsigned int>> vertexNodeIds_ = std::vector<std::vector<unsigned int>>();
 
-  public: void ComputeVoronoi(FilamentNetworkProblem *filanetprob)
+public:
+  void Initialize()
+  {
+    this->outputFolderPath_ = "./";
+    this->fileName_ = "test-file.txt";
+    this->boxsize_ = std::vector<double>{1, 1, 1};
+    this->seed_ = 1;
+    this->voronoiParticleCount_ = 300;
+  }
+
+  void ComputeVoronoi(FilamentNetworkProblem *filanetprob)
   {
     double one_third = 1.0 / 3.0;
 
@@ -1220,9 +1231,9 @@ class Voronoi
     std::ofstream verticesOutFile("vertices.out");
     for (auto vertex : this->uniqueVertices_)
     {
-      verticesOutFile << vertex[0] << " "
-                      << vertex[1] << " "
-                      << vertex[2] << std::endl;
+      verticesOutFile << boost::lexical_cast<std::string>(vertex[0]) << " "
+                      << boost::lexical_cast<std::string>(vertex[1]) << " "
+                      << boost::lexical_cast<std::string>(vertex[2]) << std::endl;
     }
     verticesOutFile << std::endl;
     verticesOutFile.close();
@@ -1439,8 +1450,8 @@ class Voronoi
   };
 
   std::vector<int> Permutation(int number,
-                                                      std::mt19937 &gen,
-                                                      std::uniform_real_distribution<> &dis_uni) const
+                               std::mt19937 &gen,
+                               std::uniform_real_distribution<> &dis_uni) const
   {
     // auxiliary variable
     int j = 0;
