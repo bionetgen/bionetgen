@@ -9,16 +9,14 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 #include "../libs/voro++-0.4.6/src/voro++.hh"
 #include "../lib/lib_vec.hpp"
 
 class FilamentNetworkProblem
 {
-public:
-  std::vector<double> boxZeroPoint_;
-  std::vector<double> boxsize_;
-  uint numfil_;
 };
 
 class Voronoi
@@ -26,6 +24,7 @@ class Voronoi
   std::string outputFolderPath_;
   std::string fileName_;
   std::vector<double> boxsize_;
+  std::vector<double> boxZeroPoint_;
   double seed_;
   uint voronoiParticleCount_;
   uint currnumfils_;
@@ -53,20 +52,25 @@ class Voronoi
   std::vector<std::vector<unsigned int>> vertexNodeIds_ = std::vector<std::vector<unsigned int>>();
 
 public:
-  void Initialize()
+  void configure(boost::property_tree::ptree config)
   {
-    this->outputFolderPath_ = "./";
-    this->fileName_ = "test-file.txt";
-    this->boxsize_ = std::vector<double>{1, 1, 1};
-    this->seed_ = 1;
-    this->voronoiParticleCount_ = 300;
+    this->outputFolderPath_ = config.get<std::string>("output-folder") + "/";
+    this->fileName_ = config.get<std::string>("output-file-prefix");
+    if (!boost::filesystem::exists(this->outputFolderPath_))
+      boost::filesystem::create_directory(this->outputFolderPath_);
+
+    this->seed_ = config.get<double>("seed");
+    this->voronoiParticleCount_ = config.get<uint>("particles");
+
+    for (auto child : config.get_child("box-size"))
+      this->boxsize_.push_back(child.second.get_value<double>());
+    for (auto child : config.get_child("box-origin"))
+      this->boxZeroPoint_.push_back(child.second.get_value<double>());
   }
 
   void ComputeVoronoi(FilamentNetworkProblem *filanetprob)
   {
     double one_third = 1.0 / 3.0;
-
-    boxsize_ = filanetprob->boxsize_;
 
     std::cout << "\n\nNetwork Generation started." << std::endl;
     std::cout << "------------------------------------------------------\n"
@@ -97,12 +101,12 @@ public:
     double z_min;
     double z_max;
 
-    x_min = filanetprob->boxZeroPoint_[0] - filanetprob->boxsize_[0] / 2;
-    x_max = filanetprob->boxZeroPoint_[0] + filanetprob->boxsize_[0] / 2;
-    y_min = filanetprob->boxZeroPoint_[1] - filanetprob->boxsize_[1] / 2;
-    y_max = filanetprob->boxZeroPoint_[1] + filanetprob->boxsize_[1] / 2;
-    z_min = filanetprob->boxZeroPoint_[2] - filanetprob->boxsize_[2] / 2;
-    z_max = filanetprob->boxZeroPoint_[2] + filanetprob->boxsize_[2] / 2;
+    x_min = this->boxZeroPoint_[0] - this->boxsize_[0] / 2;
+    x_max = this->boxZeroPoint_[0] + this->boxsize_[0] / 2;
+    y_min = this->boxZeroPoint_[1] - this->boxsize_[1] / 2;
+    y_max = this->boxZeroPoint_[1] + this->boxsize_[1] / 2;
+    z_min = this->boxZeroPoint_[2] - this->boxsize_[2] / 2;
+    z_max = this->boxZeroPoint_[2] + this->boxsize_[2] / 2;
     int n_x = 1, n_y = 1, n_z = 1;
 
     unsigned int particleCount = this->voronoiParticleCount_;
@@ -592,7 +596,7 @@ public:
 
               UnShift3D(dir_1, dir_2);
 
-              if (l2_norm(dir_1) < one_third * filanetprob->boxsize_[0])
+              if (l2_norm(dir_1) < one_third * this->boxsize_[0])
               {
                 success = true;
                 break;
@@ -633,7 +637,7 @@ public:
 
             UnShift3D(dir_1, dir_2);
 
-            if (l2_norm(dir_1) < one_third * filanetprob->boxsize_[0])
+            if (l2_norm(dir_1) < one_third * this->boxsize_[0])
             {
               success = true;
               break;
@@ -770,7 +774,6 @@ public:
     this->vertexNodeIds_ = std::vector<std::vector<unsigned int>>(this->uniqueVertices_.size());
 
     int numberOfFilaments = this->uniqueVertexEdgePartners_.size();
-    filanetprob->numfil_ = numberOfFilaments;
     this->currnumfils_ = numberOfFilaments;
 
     //*************************************************************************************
@@ -792,7 +795,7 @@ public:
     const double tolerance = 0.01;
     double temperature_inital = 0.05;
     double decay_rate_temperature = 0.95;
-    double max_movement = 0.05 * filanetprob->boxsize_[0];
+    double max_movement = 0.05 * this->boxsize_[0];
     unsigned int screen_output_every = 1000;
 
     // for binning
@@ -826,7 +829,7 @@ public:
     double temperature = temperature_inital;
     double delta_energy = 0.0;
     // normalize lengths according to Lindström
-    double length_norm_fac = 1.0 / std::pow((num_nodes / (filanetprob->boxsize_[0] * filanetprob->boxsize_[1] * filanetprob->boxsize_[2])), -1.0 / 3.0);
+    double length_norm_fac = 1.0 / std::pow((num_nodes / (this->boxsize_[0] * this->boxsize_[1] * this->boxsize_[2])), -1.0 / 3.0);
 
     // for binning
     std::vector<unsigned int> m_j_lengths;
@@ -927,7 +930,7 @@ public:
 
             // check if line is longer than 1/3 of boxlength (we do not want this to
             // ensure that our RVE stays representative)
-            if (GetEdgeLength(iter_edges) / length_norm_fac > one_third * filanetprob->boxsize_[0])
+            if (GetEdgeLength(iter_edges) / length_norm_fac > one_third * this->boxsize_[0])
             {
               success = false;
               break;
@@ -1044,8 +1047,8 @@ public:
             bool to_far_away = false;
             for (unsigned int j = 0; j < 2; ++j)
             {
-              if (l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * filanetprob->boxsize_[0] or
-                  l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * filanetprob->boxsize_[0])
+              if (l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * this->boxsize_[0] or
+                  l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * this->boxsize_[0])
               {
                 to_far_away = true;
                 break;
@@ -1220,7 +1223,7 @@ public:
     this->vtxs_shifted_ = this->uniqueVertices_;
     this->ShiftVertices(filanetprob, this->vtxs_shifted_);
 
-    std::ofstream partnersOutFile("partners.out");
+    std::ofstream partnersOutFile(this->outputFolderPath_ + this->fileName_ + "_partners.out");
     for (auto partner : this->uniqueVertexEdgePartners_)
     {
       partnersOutFile << partner[0] << " "
@@ -1228,7 +1231,7 @@ public:
     }
     partnersOutFile << std::endl;
     partnersOutFile.close();
-    std::ofstream verticesOutFile("vertices.out");
+    std::ofstream verticesOutFile(this->outputFolderPath_ + this->fileName_ + "_vertices.out");
     for (auto vertex : this->uniqueVertices_)
     {
       verticesOutFile << boost::lexical_cast<std::string>(vertex[0]) << " "
@@ -1315,8 +1318,8 @@ public:
       FilamentNetworkProblem *filanetprob, std::vector<double> const &point,
       unsigned int dimension) const
   {
-    return (filanetprob->boxZeroPoint_[dimension] +
-            filanetprob->boxsize_[dimension] / 2) <= point[dimension];
+    return (this->boxZeroPoint_[dimension] +
+            this->boxsize_[dimension] / 2) <= point[dimension];
   }
 
   bool PointIsOverLowPlane(
@@ -1324,8 +1327,8 @@ public:
       std::vector<double> const &point,
       unsigned int dimension) const
   {
-    return (filanetprob->boxZeroPoint_[dimension] -
-            filanetprob->boxsize_[dimension] / 2) >= point[dimension];
+    return (this->boxZeroPoint_[dimension] -
+            this->boxsize_[dimension] / 2) >= point[dimension];
   }
 
   bool PointIsOnHighPlane(
@@ -1333,8 +1336,8 @@ public:
       unsigned int dimension) const
   {
     double compareTolerance = 1e-13;
-    return std::abs(filanetprob->boxZeroPoint_[dimension] +
-                    filanetprob->boxsize_[dimension] / 2 - point[dimension]) <
+    return std::abs(this->boxZeroPoint_[dimension] +
+                    this->boxsize_[dimension] / 2 - point[dimension]) <
            compareTolerance;
   }
 
@@ -1343,8 +1346,8 @@ public:
       unsigned int dimension) const
   {
     double compareTolerance = 1e-13;
-    return std::abs(filanetprob->boxZeroPoint_[dimension] -
-                    filanetprob->boxsize_[dimension] / 2 - point[dimension]) <
+    return std::abs(this->boxZeroPoint_[dimension] -
+                    this->boxsize_[dimension] / 2 - point[dimension]) <
            compareTolerance;
   }
 
@@ -1378,14 +1381,14 @@ public:
 
         if (this->PointIsOverHighPlane(filanetprob, vertices[i], dim))
         {
-          this->ShiftPointDown(vertices[i], filanetprob->boxsize_, dim);
+          this->ShiftPointDown(vertices[i], this->boxsize_, dim);
           for (unsigned int k = 0; k < node_to_edges_[i].size(); ++k)
             shifted_lines.push_back(node_to_edges_[i][k]);
         }
 
         else if (this->PointIsOverLowPlane(filanetprob, vertices[i], dim))
         {
-          this->ShiftPointUp(vertices[i], filanetprob->boxsize_, dim);
+          this->ShiftPointUp(vertices[i], this->boxsize_, dim);
 
           for (unsigned int k = 0; k < node_to_edges_[i].size(); ++k)
             shifted_lines.push_back(node_to_edges_[i][k]);
