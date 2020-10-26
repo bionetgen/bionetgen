@@ -1,8 +1,7 @@
 {
     "seed": "1",
     "particles": "300",
-    "output-folder": "./output_input_generator",
-    "output-file-prefix": "test-file",
+    "output-prefix": "./output_input_generator/test-file",
     "box-size": [
         1,
         1,

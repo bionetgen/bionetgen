@@ -23,8 +23,7 @@ const double one_third = 1.0 / 3.0;
 
 class Voronoi
 {
-  std::string outputFolderPath_;
-  std::string fileName_;
+  std::string geometryPathPrefix_;
   std::vector<double> boxsize_;
   std::vector<double> boxZeroPoint_;
   double seed_;
@@ -56,10 +55,11 @@ class Voronoi
 public:
   void configure(boost::property_tree::ptree config)
   {
-    this->outputFolderPath_ = config.get<std::string>("output-folder") + "/";
-    this->fileName_ = config.get<std::string>("output-file-prefix");
-    if (!boost::filesystem::exists(this->outputFolderPath_))
-      boost::filesystem::create_directory(this->outputFolderPath_);
+    this->geometryPathPrefix_ = config.get<std::string>("output-prefix");
+    boost::filesystem::path p(geometryPathPrefix_);
+    if(p.has_parent_path())
+      if (!boost::filesystem::exists(p.parent_path()))
+        boost::filesystem::create_directory(p.parent_path());
 
     this->seed_ = config.get<double>("seed");
     this->voronoiParticleCount_ = config.get<uint>("particles");
@@ -72,8 +72,6 @@ public:
 
   void ComputeVoronoi(FilamentNetworkProblem *filanetprob)
   {
-    double one_third = 1.0 / 3.0;
-
     std::cout << "\n\nNetwork Generation started." << std::endl;
     std::cout << "------------------------------------------------------\n"
               << std::flush;
@@ -536,16 +534,6 @@ public:
 
     unsigned int num_nodes = this->uniqueVertices_map_.size();
     unsigned int num_lines = this->uniqueVertexEdgePartners_.size();
-
-    // output vertex orders
-    // std::ofstream vtxOrders_initial_file(this->outputFolderPath_ + this->fileName_ + "_vertex_orders_initial.txt");
-    // vtxOrders_initial_file << "vertex_orders \n";
-    // for (unsigned int vtxId = 0; vtxId < this->node_to_edges_.size(); ++vtxId)
-    // {
-    //   if (node_to_edges_[vtxId].size() == 0)
-    //     continue;
-    //   vtxOrders_initial_file << node_to_edges_[vtxId].size() << "\n";
-    // }
 
     bool adapt_connectivity = true;
     if (adapt_connectivity)
