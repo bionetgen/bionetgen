@@ -20,7 +20,8 @@ const double one_third = 1.0 / 3.0;
 
 class Voronoi
 {
-  std::string geometryPathPrefix_;
+  std::string outputPrefix_;
+  std::string inputPrefix_;
   std::vector<double> boxsize_;
   std::vector<double> boxZeroPoint_;
   double seed_;
@@ -48,18 +49,28 @@ class Voronoi
   std::vector<std::vector<double>> vtxs_shifted_;
   // contains all finite element node ids that belong to vertex
   std::vector<std::vector<unsigned int>> vertexNodeIds_ = std::vector<std::vector<unsigned int>>();
+  bool generate_;
+  bool simulate_;
 
 public:
   void configure(boost::property_tree::ptree config)
   {
-    this->geometryPathPrefix_ = config.get<std::string>("output-prefix");
-    boost::filesystem::path p(geometryPathPrefix_);
-    if(p.has_parent_path())
-      if (!boost::filesystem::exists(p.parent_path()))
-        boost::filesystem::create_directory(p.parent_path());
+    this->outputPrefix_ = config.get<std::string>("output-prefix");
+    boost::filesystem::path op(outputPrefix_);
+    if (op.has_parent_path())
+      if (!boost::filesystem::exists(op.parent_path()))
+        boost::filesystem::create_directory(op.parent_path());
+    this->inputPrefix_ = config.get<std::string>("input-prefix");
+    boost::filesystem::path ip(inputPrefix_);
+    if (ip.has_parent_path())
+      if (!boost::filesystem::exists(ip.parent_path()))
+        boost::filesystem::create_directory(ip.parent_path());
 
     this->seed_ = config.get<double>("seed");
     this->voronoiParticleCount_ = config.get<uint>("particles");
+
+    this->generate_ = config.get<bool>("generate");
+    this->simulate_ = config.get<bool>("simulate");
 
     for (auto child : config.get_child("box-size"))
       this->boxsize_.push_back(child.second.get_value<double>());
@@ -73,10 +84,14 @@ public:
     gen.seed(this->seed_);
     // random number between 0 and 1
     std::uniform_real_distribution<> dis_uni(0, 1);
+    if (this->generate_)
+      this->ComputeVoronoi(gen, dis_uni);
+    else
+      this->ReadGeometry();
 
-    this->ComputeVoronoi(gen, dis_uni);
-
-    this->SimulatedAnnealing(gen, dis_uni);
+    gen.seed(this->seed_);
+    if (this->simulate_)
+      this->SimulatedAnnealing(gen, dis_uni);
 
     this->OutputGeometry();
   }
@@ -479,7 +494,6 @@ public:
       node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
     }
 
-    // Compute Vertex order
     uniqueVertices_map_.clear();
     this->vtxs_shifted_ = this->uniqueVertices_;
     this->ShiftVertices(this->vtxs_shifted_);
@@ -537,195 +551,9 @@ public:
     std::cout << "   Number of nodes: " << this->uniqueVertices_for_random_draw_.size() << "\n"
               << std::flush;
 
-    unsigned int num_nodes = this->uniqueVertices_map_.size();
-    unsigned int num_lines = this->uniqueVertexEdgePartners_.size();
-
     bool adapt_connectivity = true;
     if (adapt_connectivity)
-    {
-      //  if (this->vtxOrder_goal_) this->Thinning(filanetprob); // old code
-
-      std::cout << "\n4) Adapting valency distribution " << std::endl;
-      auto start_valency = std::chrono::high_resolution_clock::now();
-
-      // Adapt valency distribution to collagen network according to Nan2018
-      // "Realizations of highly heterogeneous collagen networks via stochastic reconstruction
-      //  for micromechanical analysis of tumor cell invasion" figure 6
-      std::uniform_int_distribution<> dis_rand_line(0, 3);
-      std::vector<double> dir_1(3, 0.0);
-      std::vector<double> dir_2(3, 0.0);
-
-      unsigned int num_z_3 = std::floor(0.72 * num_nodes);
-      unsigned int num_z_4 = std::floor(0.2 * num_nodes);
-      unsigned int num_z_5 = std::floor(0.054 * num_nodes);
-      unsigned int num_z_6 = std::floor(0.011 * num_nodes);
-
-      num_z_4 += num_nodes - (num_z_3 + num_z_4 + num_z_5 + num_z_6);
-
-      // first take care of z = 6 (starting from all being z = 4)
-      std::uniform_int_distribution<> rand_node(0, uniqueVertices_for_random_draw_.size() - 1);
-
-      unsigned int num_curr_z_6 = 0;
-      unsigned int num_curr_z_5 = 0;
-
-      while (num_curr_z_6 < num_z_6)
-      {
-        unsigned int node_1 = uniqueVertices_for_random_draw_[rand_node(gen)];
-
-        if (node_to_edges_[node_1].size() == 4)
-        {
-          for (int i = 0; i < 2; ++i)
-          {
-            bool success = false;
-
-            unsigned int node_2 = 0;
-            while (not success)
-            {
-              node_2 = uniqueVertices_for_random_draw_[rand_node(gen)];
-              if (node_2 == node_1 or node_to_edges_[node_2].size() != 4)
-                continue;
-
-              // check distance
-              for (unsigned int dim = 0; dim < 3; ++dim)
-                dir_1[dim] = uniqueVertices_map_[node_1][dim] - uniqueVertices_map_[node_2][dim];
-
-              UnShift3D(dir_1, dir_2);
-
-              if (l2_norm(dir_1) < one_third * this->boxsize_[0])
-              {
-                success = true;
-                break;
-              }
-            }
-
-            // add line to these nodes
-            std::vector<unsigned int> new_line(2, 0);
-            new_line[0] = node_1;
-            new_line[1] = node_2;
-            node_to_edges_[node_1].push_back(uniqueVertexEdgePartners_.size());
-            node_to_edges_[node_2].push_back(uniqueVertexEdgePartners_.size());
-            uniqueVertexEdgePartners_.push_back(new_line);
-            ++num_curr_z_5;
-          }
-          ++num_curr_z_6;
-        }
-      }
-
-      // now take care of z = 5
-      while (num_curr_z_5 < num_z_5)
-      {
-        unsigned int node_1 = uniqueVertices_for_random_draw_[rand_node(gen)];
-
-        bool success = false;
-        if (node_to_edges_[node_1].size() == 4)
-        {
-          unsigned int node_2 = 0;
-          while (not success)
-          {
-            node_2 = uniqueVertices_for_random_draw_[rand_node(gen)];
-            if (node_2 == node_1 or node_to_edges_[node_2].size() != 4)
-              continue;
-
-            // check distance
-            for (unsigned int dim = 0; dim < 3; ++dim)
-              dir_1[dim] = uniqueVertices_map_[node_1][dim] - uniqueVertices_map_[node_2][dim];
-
-            UnShift3D(dir_1, dir_2);
-
-            if (l2_norm(dir_1) < one_third * this->boxsize_[0])
-            {
-              success = true;
-              break;
-            }
-          }
-
-          // add line to these nodes
-          std::vector<unsigned int> new_line(2, 0);
-          new_line[0] = node_1;
-          new_line[1] = node_2;
-          node_to_edges_[node_1].push_back(uniqueVertexEdgePartners_.size());
-          node_to_edges_[node_2].push_back(uniqueVertexEdgePartners_.size());
-          uniqueVertexEdgePartners_.push_back(new_line);
-          num_curr_z_5 += 2;
-        }
-      }
-
-      // now do with z = 3
-      unsigned int num_found = 0;
-      unsigned int max_try = 100;
-      std::vector<int> random_order = Permutation(uniqueVertices_for_random_draw_.size(), gen, dis_uni);
-      // do twice for better results
-      for (int s = 0; s < 2; ++s)
-      {
-        for (unsigned int rand_node_i = 0; rand_node_i < random_order.size(); ++rand_node_i)
-        {
-          int i_node = uniqueVertices_for_random_draw_[random_order[rand_node_i]];
-
-          if (node_to_edges_[i_node].size() == 4)
-          {
-            unsigned int try_i = 1;
-            bool success = false;
-            unsigned int random_line = dis_rand_line(gen);
-            unsigned int second_affected_node = -1;
-            do
-            {
-              if (uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][0] == i_node)
-                second_affected_node = uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][1];
-              else
-                second_affected_node = uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][0];
-
-              if (node_to_edges_[second_affected_node].size() == 4)
-              {
-                success = true;
-                break;
-              }
-
-              ++try_i;
-
-            } while (try_i < max_try);
-
-            if (not success)
-              continue;
-
-            //! don't erase yet! this destroys the order in edgeIds_valid!
-            this->uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]] =
-                std::vector<unsigned int>{INT32_MAX, INT32_MAX};
-
-            int index = std::distance(node_to_edges_[second_affected_node].begin(), std::find(node_to_edges_[second_affected_node].begin(),
-                                                                                              node_to_edges_[second_affected_node].end(),
-                                                                                              node_to_edges_[i_node][random_line]));
-
-            node_to_edges_[second_affected_node].erase(node_to_edges_[second_affected_node].begin() + index);
-            node_to_edges_[i_node].erase(node_to_edges_[i_node].begin() + random_line);
-
-            num_found += 2;
-          }
-
-          if (num_found >= num_z_3)
-            break;
-        }
-      }
-      // now really remove edges
-      // erase now
-      this->uniqueVertexEdgePartners_.erase(std::remove(this->uniqueVertexEdgePartners_.begin(),
-                                                        this->uniqueVertexEdgePartners_.end(),
-                                                        std::vector<unsigned int>{INT32_MAX, INT32_MAX}),
-                                            this->uniqueVertexEdgePartners_.end());
-      num_lines = uniqueVertexEdgePartners_.size();
-
-      // recompute node to edges after adaption of connectivity
-      node_to_edges_.clear();
-      node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
-      for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
-      {
-        node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-        node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
-      }
-
-      auto stop_valency = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> elapsed_valency = stop_valency - start_valency;
-      std::cout << "   Adaption of valency distribution is done now. It took " << elapsed_valency.count() / 60 << " minutes. \n";
-    }
+      this->AdaptConnectivity(gen, dis_uni);
 
     // Compute Vertex order
     this->uniqueVertexOrders_.clear();
@@ -1372,8 +1200,201 @@ public:
         this->uniqueVertexEdgePartners_.end());
   }
 
+  void AdaptConnectivity(std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
+  {
+
+    std::cout << "\n4) Adapting valency distribution " << std::endl;
+    auto start_valency = std::chrono::high_resolution_clock::now();
+
+    unsigned int num_nodes = this->uniqueVertices_map_.size();
+    unsigned int num_lines = this->uniqueVertexEdgePartners_.size();
+
+    // Adapt valency distribution to collagen network according to Nan2018
+    // "Realizations of highly heterogeneous collagen networks via stochastic reconstruction
+    //  for micromechanical analysis of tumor cell invasion" figure 6
+    std::uniform_int_distribution<> dis_rand_line(0, 3);
+    std::vector<double> dir_1(3, 0.0);
+    std::vector<double> dir_2(3, 0.0);
+
+    unsigned int num_z_3 = std::floor(0.72 * num_nodes);
+    unsigned int num_z_4 = std::floor(0.2 * num_nodes);
+    unsigned int num_z_5 = std::floor(0.054 * num_nodes);
+    unsigned int num_z_6 = std::floor(0.011 * num_nodes);
+
+    num_z_4 += num_nodes - (num_z_3 + num_z_4 + num_z_5 + num_z_6);
+
+    // first take care of z = 6 (starting from all being z = 4)
+    std::uniform_int_distribution<> rand_node(0, uniqueVertices_for_random_draw_.size() - 1);
+
+    unsigned int num_curr_z_6 = 0;
+    unsigned int num_curr_z_5 = 0;
+
+    while (num_curr_z_6 < num_z_6)
+    {
+      unsigned int node_1 = uniqueVertices_for_random_draw_[rand_node(gen)];
+
+      if (node_to_edges_[node_1].size() == 4)
+      {
+        for (int i = 0; i < 2; ++i)
+        {
+          bool success = false;
+
+          unsigned int node_2 = 0;
+          while (not success)
+          {
+            node_2 = uniqueVertices_for_random_draw_[rand_node(gen)];
+            if (node_2 == node_1 or node_to_edges_[node_2].size() != 4)
+              continue;
+
+            // check distance
+            for (unsigned int dim = 0; dim < 3; ++dim)
+              dir_1[dim] = uniqueVertices_map_[node_1][dim] - uniqueVertices_map_[node_2][dim];
+
+            UnShift3D(dir_1, dir_2);
+
+            if (l2_norm(dir_1) < one_third * this->boxsize_[0])
+            {
+              success = true;
+              break;
+            }
+          }
+
+          // add line to these nodes
+          std::vector<unsigned int> new_line(2, 0);
+          new_line[0] = node_1;
+          new_line[1] = node_2;
+          node_to_edges_[node_1].push_back(uniqueVertexEdgePartners_.size());
+          node_to_edges_[node_2].push_back(uniqueVertexEdgePartners_.size());
+          uniqueVertexEdgePartners_.push_back(new_line);
+          ++num_curr_z_5;
+        }
+        ++num_curr_z_6;
+      }
+    }
+
+    // now take care of z = 5
+    while (num_curr_z_5 < num_z_5)
+    {
+      unsigned int node_1 = uniqueVertices_for_random_draw_[rand_node(gen)];
+
+      bool success = false;
+      if (node_to_edges_[node_1].size() == 4)
+      {
+        unsigned int node_2 = 0;
+        while (not success)
+        {
+          node_2 = uniqueVertices_for_random_draw_[rand_node(gen)];
+          if (node_2 == node_1 or node_to_edges_[node_2].size() != 4)
+            continue;
+
+          // check distance
+          for (unsigned int dim = 0; dim < 3; ++dim)
+            dir_1[dim] = uniqueVertices_map_[node_1][dim] - uniqueVertices_map_[node_2][dim];
+
+          UnShift3D(dir_1, dir_2);
+
+          if (l2_norm(dir_1) < one_third * this->boxsize_[0])
+          {
+            success = true;
+            break;
+          }
+        }
+
+        // add line to these nodes
+        std::vector<unsigned int> new_line(2, 0);
+        new_line[0] = node_1;
+        new_line[1] = node_2;
+        node_to_edges_[node_1].push_back(uniqueVertexEdgePartners_.size());
+        node_to_edges_[node_2].push_back(uniqueVertexEdgePartners_.size());
+        uniqueVertexEdgePartners_.push_back(new_line);
+        num_curr_z_5 += 2;
+      }
+    }
+
+    // now do with z = 3
+    unsigned int num_found = 0;
+    unsigned int max_try = 100;
+    std::vector<int> random_order = Permutation(uniqueVertices_for_random_draw_.size(), gen, dis_uni);
+    // do twice for better results
+    for (int s = 0; s < 2; ++s)
+    {
+      for (unsigned int rand_node_i = 0; rand_node_i < random_order.size(); ++rand_node_i)
+      {
+        int i_node = uniqueVertices_for_random_draw_[random_order[rand_node_i]];
+
+        if (node_to_edges_[i_node].size() == 4)
+        {
+          unsigned int try_i = 1;
+          bool success = false;
+          unsigned int random_line = dis_rand_line(gen);
+          unsigned int second_affected_node = -1;
+          do
+          {
+            if (uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][0] == i_node)
+              second_affected_node = uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][1];
+            else
+              second_affected_node = uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][0];
+
+            if (node_to_edges_[second_affected_node].size() == 4)
+            {
+              success = true;
+              break;
+            }
+
+            ++try_i;
+
+          } while (try_i < max_try);
+
+          if (not success)
+            continue;
+
+          //! don't erase yet! this destroys the order in edgeIds_valid!
+          this->uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]] =
+              std::vector<unsigned int>{INT32_MAX, INT32_MAX};
+
+          int index = std::distance(node_to_edges_[second_affected_node].begin(), std::find(node_to_edges_[second_affected_node].begin(),
+                                                                                            node_to_edges_[second_affected_node].end(),
+                                                                                            node_to_edges_[i_node][random_line]));
+
+          node_to_edges_[second_affected_node].erase(node_to_edges_[second_affected_node].begin() + index);
+          node_to_edges_[i_node].erase(node_to_edges_[i_node].begin() + random_line);
+
+          num_found += 2;
+        }
+
+        if (num_found >= num_z_3)
+          break;
+      }
+    }
+    // now really remove edges
+    // erase now
+    this->uniqueVertexEdgePartners_.erase(std::remove(this->uniqueVertexEdgePartners_.begin(),
+                                                      this->uniqueVertexEdgePartners_.end(),
+                                                      std::vector<unsigned int>{INT32_MAX, INT32_MAX}),
+                                          this->uniqueVertexEdgePartners_.end());
+    num_lines = uniqueVertexEdgePartners_.size();
+
+    // recompute node to edges after adaption of connectivity
+    node_to_edges_.clear();
+    node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
+    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    {
+      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
+      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+    }
+
+    auto stop_valency = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed_valency = stop_valency - start_valency;
+    std::cout << "   Adaption of valency distribution is done now. It took " << elapsed_valency.count() / 60 << " minutes. \n";
+  }
+
   void SimulatedAnnealing(std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
   {
+
+    // put all vertex ids in vector to ease random draw of vertex
+    uniqueVertices_for_random_draw_.reserve(uniqueVertices_map_.size());
+    for (auto const &iter : uniqueVertices_map_)
+      uniqueVertices_for_random_draw_.push_back(iter.first);
 
     //*************************************************************************************
     // DO SIMULATED ANNEALING
@@ -1475,20 +1496,20 @@ public:
 
     // write initial distributions
     // output initial filament lengths
-    std::ofstream filLen_file_initial(this->geometryPathPrefix_ + "_fil_lengths_initial.txt");
+    std::ofstream filLen_file_initial(this->outputPrefix_ + "_fil_lengths_initial.txt");
     filLen_file_initial << "fil_lengths\n";
     for (unsigned int filId = 0; filId < this->uniqueVertexEdgePartners_.size(); ++filId)
       filLen_file_initial << this->GetFilamentLength(filId) * length_norm_fac << "\n";
 
     // print final cosine distribution
-    std::ofstream filcoshisto_initial_file(this->geometryPathPrefix_ + "_cosine_histo_initial.txt");
+    std::ofstream filcoshisto_initial_file(this->outputPrefix_ + "_cosine_histo_initial.txt");
     filcoshisto_initial_file << "cosine\n";
     for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
       for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
         filcoshisto_initial_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
 
     // write temperature and energies to file
-    std::ofstream fil_obj_function(this->geometryPathPrefix_ + "_obj_function.txt");
+    std::ofstream fil_obj_function(this->outputPrefix_ + "_obj_function.txt");
     fil_obj_function << "step, temperature, length, cosine, total \n";
 
     //---------------------------
@@ -1794,13 +1815,13 @@ public:
     } while ((iter < max_iter) and ((last_energy_line > tolerance) or (last_energy_cosine > tolerance)));
 
     // print final cosine distribution
-    std::ofstream filcoshisto_file(this->geometryPathPrefix_ + "_cosine_histo.txt");
+    std::ofstream filcoshisto_file(this->outputPrefix_ + "_cosine_histo.txt");
     filcoshisto_file << "cosine\n";
     for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
       for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
         filcoshisto_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
 
-    std::ofstream filcos_file(this->geometryPathPrefix_ + "_cosine_normal.txt");
+    std::ofstream filcos_file(this->outputPrefix_ + "_cosine_normal.txt");
     filcos_file << "bin, cosine \n";
     for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
     {
@@ -1819,14 +1840,14 @@ public:
 
   void OutputGeometry()
   {
-    std::ofstream partnersOutFile(this->geometryPathPrefix_ + "_partners.out");
+    std::ofstream partnersOutFile(this->outputPrefix_ + "_partners.out");
     for (auto partner : this->uniqueVertexEdgePartners_)
     {
       partnersOutFile << partner[0] << " "
                       << partner[1] << std::endl;
     }
     partnersOutFile.close();
-    std::ofstream verticesOutFile(this->geometryPathPrefix_ + "_vertices.out");
+    std::ofstream verticesOutFile(this->outputPrefix_ + "_vertices.out");
     for (auto vertexI = 0; vertexI < this->uniqueVertices_.size(); vertexI++)
     {
       verticesOutFile << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][0]) << " "
@@ -1836,7 +1857,7 @@ public:
     }
     verticesOutFile.close();
 
-    std::ofstream nodesToEdgesOutFile(this->geometryPathPrefix_ + "_nodes_to_edges.out");
+    std::ofstream nodesToEdgesOutFile(this->outputPrefix_ + "_nodes_to_edges.out");
     for (auto edges : this->node_to_edges_)
     {
       for (auto edge : edges)
@@ -1844,5 +1865,71 @@ public:
       nodesToEdgesOutFile << std::endl;
     }
     nodesToEdgesOutFile.close();
+  }
+
+  void ReadGeometry()
+  {
+    this->uniqueVertexEdgePartners_.clear();
+    this->uniqueVertexOrders_.clear();
+    this->uniqueVertices_map_.clear();
+    this->uniqueVertices_.clear();
+    this->node_to_edges_.clear();
+    std::string row;
+    std::ifstream verticesFile = std::ifstream(this->inputPrefix_ + "_vertices.out");
+    auto rowI = 0;
+    while (!verticesFile.eof())
+    {
+      std::getline(verticesFile, row);
+      if (row == "")
+        continue;
+      if (verticesFile.bad() || verticesFile.fail())
+        break;
+      std::stringstream s(row);
+      double d;
+      std::vector<double> vertex;
+      auto i = 0;
+      while (s >> d)
+        if (++i <= 3)
+          vertex.push_back(d);
+        else if (i > 3)
+          this->uniqueVertexOrders_.push_back(d);
+        else
+          throw "Error in voronoi geometry loading.";
+      this->uniqueVertices_.push_back(vertex);
+      if (this->uniqueVertexOrders_[rowI] != 0)
+        this->uniqueVertices_map_.emplace(rowI, vertex);
+      rowI++;
+    }
+    std::ifstream partnersFile = std::ifstream(this->inputPrefix_ + "_partners.out");
+    while (!partnersFile.eof())
+    {
+      std::getline(partnersFile, row);
+      if (row == "")
+        continue;
+      if (partnersFile.bad() || partnersFile.fail())
+        break;
+      std::stringstream s(row);
+      uint u;
+      std::vector<uint> partners;
+      while (s >> u)
+        partners.push_back(u);
+      this->uniqueVertexEdgePartners_.push_back(partners);
+    }
+
+    std::ifstream nodesToEdgesFile = std::ifstream(this->inputPrefix_ + "_nodes_to_edges.out");
+    while (!nodesToEdgesFile.eof())
+    {
+      std::getline(nodesToEdgesFile, row);
+      if (row == "") //! DO NOT continue; empty lines mean no edges for nodes (aka dead nodes)
+        ;
+      if (nodesToEdgesFile.bad() || nodesToEdgesFile.fail())
+        break;
+      std::stringstream s(row);
+      uint u;
+      std::vector<uint> edges;
+      while (s >> u)
+        edges.push_back(u);
+      this->node_to_edges_.push_back(edges);
+    }
   }
 };

@@ -1,7 +1,10 @@
 {
     "seed": "1",
     "particles": "300",
+    "input-prefix": "./output_input_generator/test-file",
     "output-prefix": "./output_input_generator/test-file",
+    "generate": true,
+    "simulate": true,
     "box-size": [
         1,
         1,
