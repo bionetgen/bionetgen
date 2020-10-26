@@ -1229,50 +1229,25 @@ public:
       partnersOutFile << partner[0] << " "
                       << partner[1] << std::endl;
     }
-    partnersOutFile << std::endl;
     partnersOutFile.close();
     std::ofstream verticesOutFile(this->outputFolderPath_ + this->fileName_ + "_vertices.out");
-    for (auto vertex : this->uniqueVertices_)
+    for (auto vertexI = 0; vertexI < this->uniqueVertices_.size(); vertexI++)
     {
-      verticesOutFile << boost::lexical_cast<std::string>(vertex[0]) << " "
-                      << boost::lexical_cast<std::string>(vertex[1]) << " "
-                      << boost::lexical_cast<std::string>(vertex[2]) << std::endl;
+      verticesOutFile << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][0]) << " "
+                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][1]) << " "
+                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][2]) << " "
+                      << this->uniqueVertexOrders_[vertexI] << std::endl;
     }
-    verticesOutFile << std::endl;
     verticesOutFile.close();
 
-    boost::filesystem::ifstream partnersInFile("partners.out");
-    std::string line;
-    std::vector<std::vector<int>> partners;
-    while (std::getline(partnersInFile, line))
+    std::ofstream nodesToEdgesOutFile(this->outputFolderPath_ + this->fileName_ + "_nodes_to_edges.out");
+    for (auto edges : this->node_to_edges_)
     {
-      if (line != "")
-      {
-        std::vector<std::string> parts;
-        boost::split(parts, line, boost::is_any_of(" "));
-        std::vector<int> partner = {std::stoi(parts[0]), std::stoi(parts[1])};
-        partners.push_back(partner);
-      }
-      else
-        break;
+      for(auto edge: edges)
+        nodesToEdgesOutFile << edge << " ";
+      nodesToEdgesOutFile << std::endl;
     }
-    partnersInFile.close();
-
-    boost::filesystem::ifstream verticesInFile("vertices.out");
-    std::vector<std::vector<double>> vs;
-    while (std::getline(verticesInFile, line))
-    {
-      if (line != "")
-      {
-        std::vector<std::string> parts;
-        boost::split(parts, line, boost::is_any_of(" "));
-        std::vector<double> vertex = {std::stod(parts[0]), std::stod(parts[1]), std::stod(parts[2])};
-        vs.push_back(vertex);
-      }
-      else
-        break;
-    }
-    verticesInFile.close();
+    nodesToEdgesOutFile.close();
   }
 
   double GetFilamentLength(
