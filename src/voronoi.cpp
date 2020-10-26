@@ -19,6 +19,8 @@ class FilamentNetworkProblem
 {
 };
 
+const double one_third = 1.0 / 3.0;
+
 class Voronoi
 {
   std::string outputFolderPath_;
@@ -776,478 +778,14 @@ public:
     int numberOfFilaments = this->uniqueVertexEdgePartners_.size();
     this->currnumfils_ = numberOfFilaments;
 
-    //*************************************************************************************
-    // DO SIMULATED ANNEALING
-    bool do_simulated_annealing = true;
-    if (not do_simulated_annealing)
-      return;
-    //*************************************************************************************
-
-    std::cout << "\n5) Starting Simulated Annealing\n\n\n";
-    // time measurement start
-    auto start = std::chrono::high_resolution_clock::now();
-
-    // Choose values for input parameters
-    unsigned const int max_iter = 5000;
-    unsigned const int max_subiter = 100;
-    double weight_line = 1.0;
-    double weight_cosine = 1.0;
-    const double tolerance = 0.01;
-    double temperature_inital = 0.05;
-    double decay_rate_temperature = 0.95;
-    double max_movement = 0.05 * this->boxsize_[0];
-    unsigned int screen_output_every = 1000;
-
-    // for binning
-    unsigned int p_num_bins_lengths = 1000;
-    unsigned int p_num_bins_cosines = 1000;
-
-    num_nodes = uniqueVertices_map_.size();
-    num_lines = uniqueVertexEdgePartners_.size();
-
-    // ... some more
-    // to select interchange movement
-    std::uniform_int_distribution<> dis_action(1, 2);
-    // to select random node
-    std::uniform_int_distribution<> dis_node(0, num_nodes - 1);
-    // to select random line
-    std::uniform_int_distribution<> dis_line(0, num_lines - 1);
-    // to select random node movement
-    std::uniform_real_distribution<> dis_node_move(-1, 1);
-
-    // ... and even more
-    std::vector<double> rand_new_node_pos(3, 0.0);
-    std::vector<std::vector<double>> uniqueVertices_backup(this->uniqueVertices_);
-    std::vector<std::vector<unsigned int>> uniqueVertexEdgePartners_backup(this->uniqueVertexEdgePartners_);
-    unsigned int random_line_1 = 0;
-    unsigned int random_line_2 = 0;
-    unsigned int iter = 0;
-    double curr_energy_line = 0.0;
-    double last_energy_line = 0.0;
-    double curr_energy_cosine = 0.0;
-    double last_energy_cosine = 0.0;
-    double temperature = temperature_inital;
-    double delta_energy = 0.0;
-    // normalize lengths according to Lindström
-    double length_norm_fac = 1.0 / std::pow((num_nodes / (this->boxsize_[0] * this->boxsize_[1] * this->boxsize_[2])), -1.0 / 3.0);
-
-    // for binning
-    std::vector<unsigned int> m_j_lengths;
-    std::vector<unsigned int> m_j_cosines;
-    double interval_size_lengths = 5.0 / p_num_bins_lengths;
-    double interval_size_cosines = 2.0 / p_num_bins_cosines;
-
-    // build uniqueVertices_to_Edge_map_
-    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
-    {
-      uniqueVertices_to_Edge_map_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-      uniqueVertices_to_Edge_map_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
-    }
-
-    // compute cosine distribution
-    std::vector<double> cosine_distribution(p_num_bins_cosines, 0.0);
-    std::vector<std::vector<double>> node_cosine_to_bin(uniqueVertices_.size(), std::vector<double>());
-    std::vector<double> dir_vec_1(3, 0.0);
-    std::vector<double> dir_vec_2(3, 0.0);
-    for (auto const &i_node : uniqueVertices_to_Edge_map_)
-    {
-      ComputeCosineDistributionOfNode(filanetprob, i_node.first, dir_vec_1, dir_vec_2,
-                                      interval_size_cosines, node_cosine_to_bin, cosine_distribution);
-    }
-    std::vector<std::vector<double>> node_cosine_to_bin_backup(node_cosine_to_bin);
-
-    unsigned int num_cosines = 0;
-    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
-      num_cosines += cosine_distribution[i_c];
-
-    // compute length distribution
-    std::vector<double> length_distribution(p_num_bins_lengths, 0.0);
-    std::vector<double> edge_length_to_bin(uniqueVertexEdgePartners_.size(), -1.0);
-    for (unsigned int i_edge = 0; i_edge < num_lines; ++i_edge)
-    {
-      UpdateLengthDistributionOfLine(filanetprob, i_edge, length_norm_fac, dir_vec_1,
-                                     interval_size_lengths, edge_length_to_bin, length_distribution);
-    }
-    std::vector<double> edge_length_to_bin_backup(edge_length_to_bin);
-
-    // compute for first iteration
-    EnergyLineLindstrom(last_energy_line, num_lines, interval_size_lengths, length_distribution);
-    EnergyCosineLindstrom(last_energy_cosine, interval_size_cosines, cosine_distribution, num_cosines);
-
-    // write initial distributions
-    // output initial filament lengths
-    std::ofstream filLen_file_initial(this->outputFolderPath_ + this->fileName_ + "_fil_lengths_initial.txt");
-    filLen_file_initial << "fil_lengths\n";
-    for (unsigned int filId = 0; filId < this->uniqueVertexEdgePartners_.size(); ++filId)
-      filLen_file_initial << this->GetFilamentLength(filId) * length_norm_fac << "\n";
-
-    // print final cosine distribution
-    std::ofstream filcoshisto_initial_file(this->outputFolderPath_ + this->fileName_ + "_cosine_histo_initial.txt");
-    filcoshisto_initial_file << "cosine\n";
-    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
-      for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
-        filcoshisto_initial_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
-
-    // write temperature and energies to file
-    std::ofstream fil_obj_function(this->outputFolderPath_ + this->fileName_ + "_obj_function.txt");
-    fil_obj_function << "step, temperature, length, cosine, total \n";
-
-    //---------------------------
-    // START SIMULATED ANNEALING
-    //---------------------------
-    do
-    {
-      unsigned int action = 1; //dis_action(gen);
-
-      // ************************************************
-      // type one: move random point in random direction
-      // ************************************************
-      if (action == 1)
-      {
-        bool success = true;
-        unsigned int subiter = 0;
-        do
-        {
-          ++subiter;
-          success = true;
-          // select a random node
-          unsigned int rand_node_id = uniqueVertices_for_random_draw_[dis_node(gen)];
-
-          // update position of this vertex
-          for (unsigned int idim = 0; idim < 3; ++idim)
-          {
-            this->uniqueVertices_[rand_node_id][idim] += dis_node_move(gen) * max_movement;
-          }
-
-          // recompute length and cosine distribution of affected nodes
-          std::set<unsigned int> affected_nodes;
-          std::set<unsigned int> affected_lines;
-          for (auto const &iter_edges : node_to_edges_[rand_node_id])
-          {
-            affected_nodes.insert(this->uniqueVertexEdgePartners_[iter_edges][0]);
-            affected_nodes.insert(this->uniqueVertexEdgePartners_[iter_edges][1]);
-            affected_lines.insert(iter_edges);
-
-            // check if line is longer than 1/3 of boxlength (we do not want this to
-            // ensure that our RVE stays representative)
-            if (GetEdgeLength(iter_edges) / length_norm_fac > one_third * this->boxsize_[0])
-            {
-              success = false;
-              break;
-            }
-          }
-
-          if (success == false)
-          {
-            RevertUpdateOfNodes(affected_nodes, uniqueVertices_backup);
-            continue;
-          }
-
-          for (auto const &iter_nodes : affected_nodes)
-            ComputeCosineDistributionOfNode(filanetprob, iter_nodes, dir_vec_1, dir_vec_2,
-                                            interval_size_cosines, node_cosine_to_bin, cosine_distribution);
-
-          for (auto const &iter_edges : affected_lines)
-            UpdateLengthDistributionOfLine(filanetprob, iter_edges, length_norm_fac, dir_vec_1,
-                                           interval_size_lengths, edge_length_to_bin, length_distribution);
-
-          // compute energies
-          // 1.) line
-          EnergyLineLindstrom(curr_energy_line, num_lines, interval_size_lengths, length_distribution);
-
-          // 2.) cosine
-          EnergyCosineLindstrom(curr_energy_cosine, interval_size_cosines, cosine_distribution, num_cosines);
-
-          // compute delta E
-          delta_energy = weight_line * (curr_energy_line - last_energy_line) +
-                         weight_cosine * (curr_energy_cosine - last_energy_cosine);
-
-          if ((delta_energy < 0.0) or (dis_uni(gen) < std::exp(-delta_energy / temperature)))
-          {
-            last_energy_line = curr_energy_line;
-            last_energy_cosine = curr_energy_cosine;
-            UpdateBackUpOfNodes(affected_nodes, uniqueVertices_backup);
-            UpdateBackupOfCosineDistribution(affected_nodes, node_cosine_to_bin, node_cosine_to_bin_backup);
-            UpdateBackupOfLineDistribution(affected_lines, edge_length_to_bin, edge_length_to_bin_backup);
-            success = true;
-          }
-          else
-          {
-            RevertUpdateOfNodes(affected_nodes, uniqueVertices_backup);
-            RevertComputeCosineDistributionOfNode(affected_nodes, cosine_distribution, node_cosine_to_bin, node_cosine_to_bin_backup);
-            RevertUpdateLengthDistributionOfLine(affected_lines, length_distribution, edge_length_to_bin, edge_length_to_bin_backup);
-            success = false;
-          }
-        } while ((success == false) and (subiter < max_subiter));
-
-        if (iter % screen_output_every == 0)
-        {
-          std::cout << "line energy move 1 " << curr_energy_line << std::endl;
-          std::cout << "cosine energy move 1 " << curr_energy_cosine << std::endl;
-          std::cout << " iter " << iter << std::endl;
-
-          fil_obj_function << iter;
-          fil_obj_function << ", " << temperature;
-          fil_obj_function << ", " << curr_energy_line;
-          fil_obj_function << ", " << curr_energy_cosine;
-          fil_obj_function << ", " << curr_energy_line + curr_energy_cosine << "\n";
-        }
-      }
-
-      // ************************************************
-      // type two: change connection of two lines
-      // ************************************************
-      else if (action == 2)
-      {
-
-        //      Current Conf.           Case_1             Case_2
-        //      _____________       _____________      ______________
-        //
-        //      1 o------o 2         1 o     o 2        1 o       o 2
-        //                              \   /             |       |
-        //                               \ /              |       |
-        //                                /               |       |
-        //                               /  \             |       |
-        //      3 o------o 4         3  o    o 4        3 o       o 4
-        //
-        //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-        bool success = false;
-        unsigned int subiter = 0;
-        do
-        {
-          ++subiter;
-          success = true;
-
-          // select two (different) random lines
-          random_line_1 = dis_line(gen);
-          bool not_yet_found = true;
-          std::vector<unsigned int> nodes_line_1(2, 0);
-          std::vector<unsigned int> nodes_line_2(2, 0);
-
-          nodes_line_1[0] = uniqueVertexEdgePartners_[random_line_1][0];
-          nodes_line_1[1] = uniqueVertexEdgePartners_[random_line_1][1];
-
-          unsigned int control_iter = 0;
-          while (not_yet_found)
-          {
-            ++control_iter;
-            // prevent code from getting stuck in this loop
-            if (control_iter > 1e06)
-            {
-              std::cout << " Not able to find close enough second edge for option 2 " << std::endl;
-              exit(0);
-            }
-
-            random_line_2 = dis_line(gen);
-            nodes_line_2[0] = uniqueVertexEdgePartners_[random_line_2][0];
-            nodes_line_2[1] = uniqueVertexEdgePartners_[random_line_2][1];
-
-            // already check distance here
-            bool to_far_away = false;
-            for (unsigned int j = 0; j < 2; ++j)
-            {
-              if (l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * this->boxsize_[0] or
-                  l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * this->boxsize_[0])
-              {
-                to_far_away = true;
-                break;
-              }
-            }
-
-            if (to_far_away)
-              continue;
-
-            // check if lines share a node, if so, choose another one
-            if (not((nodes_line_1[0] == nodes_line_2[0]) or (nodes_line_1[0] == nodes_line_2[1]) or
-                    (nodes_line_1[1] == nodes_line_2[0]) or (nodes_line_1[1] == nodes_line_2[1])))
-              not_yet_found = false;
-          }
-
-          std::set<unsigned int> affected_nodes;
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_1][0]);
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_1][1]);
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_2][0]);
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_2][1]);
-
-          std::set<unsigned int> affected_lines;
-          affected_lines.insert(random_line_1);
-          affected_lines.insert(random_line_2);
-
-          // get all nodes that are connected to the respective four nodes
-          std::vector<std::set<unsigned int>> nodes_to_nodes_1(2, std::set<unsigned int>());
-          std::vector<std::set<unsigned int>> nodes_to_nodes_2(2, std::set<unsigned int>());
-
-          for (unsigned int j = 0; j < 2; ++j)
-          {
-            for (unsigned int k = 0; k < node_to_edges_[nodes_line_1[j]].size(); ++k)
-            {
-              nodes_to_nodes_1[j].insert(uniqueVertexEdgePartners_[k][0]);
-              nodes_to_nodes_1[j].insert(uniqueVertexEdgePartners_[k][1]);
-            }
-          }
-
-          for (unsigned int j = 0; j < 2; ++j)
-          {
-            for (unsigned int k = 0; k < node_to_edges_[nodes_line_2[j]].size(); ++k)
-            {
-              nodes_to_nodes_2[j].insert(uniqueVertexEdgePartners_[k][0]);
-              nodes_to_nodes_2[j].insert(uniqueVertexEdgePartners_[k][1]);
-            }
-          }
-
-          // decide which case is attempted first
-          //        int mov_case = dis_action(gen);
-
-          // we always try movement one first
-          bool move_one_sucess = true;
-
-          // next, check if one of the two new lines already exists for case 1
-          if ((nodes_to_nodes_1[0].count(nodes_line_2[1])) or (nodes_to_nodes_1[1].count(nodes_line_2[0])))
-            move_one_sucess = false;
-
-          // update new connectivity
-          if (move_one_sucess == true)
-          {
-            this->uniqueVertexEdgePartners_[random_line_1][1] = nodes_line_2[1];
-            this->uniqueVertexEdgePartners_[random_line_2][1] = nodes_line_1[1];
-          }
-
-          if (move_one_sucess == false)
-          {
-            // check if one of the two new lines already exists for case 2
-            if (nodes_to_nodes_1[0].count(nodes_line_2[0]) or nodes_to_nodes_1[1].count(nodes_line_2[1]))
-            {
-              success = false;
-              continue;
-            }
-
-            // update new connectivity
-            this->uniqueVertexEdgePartners_[random_line_1][1] = nodes_line_2[0];
-            this->uniqueVertexEdgePartners_[random_line_2][0] = nodes_line_1[1];
-          }
-
-          // update length distribution
-          UpdateLengthDistributionOfLine(filanetprob, random_line_1, length_norm_fac, dir_vec_1,
-                                         interval_size_lengths, edge_length_to_bin, length_distribution);
-          UpdateLengthDistributionOfLine(filanetprob, random_line_2, length_norm_fac, dir_vec_1,
-                                         interval_size_lengths, edge_length_to_bin, length_distribution);
-          // recompute cosine distribution of affected nodes
-          for (unsigned int j = 0; j < 2; ++j)
-          {
-            ComputeCosineDistributionOfNode(filanetprob, nodes_line_1[j], dir_vec_1, dir_vec_2,
-                                            interval_size_cosines, node_cosine_to_bin, cosine_distribution);
-            ComputeCosineDistributionOfNode(filanetprob, nodes_line_2[j], dir_vec_1, dir_vec_2,
-                                            interval_size_cosines, node_cosine_to_bin, cosine_distribution);
-          }
-
-          // compute energies
-          // 1.) line
-          EnergyLineLindstrom(curr_energy_line, num_lines, interval_size_lengths, length_distribution);
-
-          // 2.) cosine
-          EnergyCosineLindstrom(last_energy_cosine, interval_size_cosines, cosine_distribution, num_cosines);
-
-          // compute delta E
-          delta_energy = weight_line * (curr_energy_line - last_energy_line) +
-                         weight_cosine * (curr_energy_cosine - last_energy_cosine);
-
-          if ((delta_energy < 0.0) or (dis_uni(gen) < std::exp(-delta_energy / temperature)))
-          {
-            last_energy_line = curr_energy_line;
-            last_energy_cosine = curr_energy_cosine;
-            UpdateBackUpOfEdges(affected_lines, uniqueVertexEdgePartners_backup);
-            UpdateBackupOfCosineDistribution(affected_nodes, node_cosine_to_bin, node_cosine_to_bin_backup);
-            UpdateBackupOfLineDistribution(affected_lines, edge_length_to_bin, edge_length_to_bin_backup);
-            success = true;
-          }
-          else
-          {
-            RevertUpdateOfEdges(affected_lines, uniqueVertexEdgePartners_backup);
-            RevertComputeCosineDistributionOfNode(affected_nodes, cosine_distribution, node_cosine_to_bin, node_cosine_to_bin_backup);
-            RevertUpdateLengthDistributionOfLine(affected_lines, length_distribution, edge_length_to_bin, edge_length_to_bin_backup);
-            success = false;
-          }
-        } while (success == false and subiter < max_subiter);
-
-        // screen output
-        if (iter % screen_output_every == 0)
-        {
-          std::cout << "line energy move 2 " << curr_energy_line << std::endl;
-          std::cout << "cosine energy move 2 " << curr_energy_cosine << std::endl;
-          std::cout << " iter 2 " << iter << std::endl;
-        }
-      }
-
-      // neither movement one nor two
-      else
-      {
-        throw "You should not be here";
-      }
-
-      // according to Nan2018 (power law cooling schedule)
-      if (iter % 1000 == 0)
-      {
-        temperature = std::pow(decay_rate_temperature, iter / 1000.0) * temperature_inital;
-        std::cout << "temperature " << temperature << std::endl;
-      }
-
-      ++iter;
-    } while ((iter < max_iter) and ((last_energy_line > tolerance) or (last_energy_cosine > tolerance)));
-
-    // print final cosine distribution
-    std::ofstream filcoshisto_file(this->outputFolderPath_ + this->fileName_ + "_cosine_histo.txt");
-    filcoshisto_file << "cosine\n";
-    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
-      for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
-        filcoshisto_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
-
-    std::ofstream filcos_file(this->outputFolderPath_ + this->fileName_ + "_cosine_normal.txt");
-    filcos_file << "bin, cosine \n";
-    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
-    {
-      filcos_file << interval_size_cosines * i_c + interval_size_cosines * 0.5;
-      filcos_file << ", " << cosine_distribution[i_c] - 1.0 << "\n";
-    }
-
-    // time measurement end
-    auto stop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = stop - start;
-
-    std::cout << "\nSimulation annealing took " << elapsed.count() / 60 << " minutes for " << iter << " iterations" << std::endl;
-    std::cout << "Final line energy:   " << last_energy_line << std::endl;
-    std::cout << "Final cosine energy: " << last_energy_cosine << std::endl;
+    SimulatedAnnealing(filanetprob, gen, dis_uni);
 
     // now that we are done shift one time again to provide the shifted coordinates
     // for other functions
     this->vtxs_shifted_ = this->uniqueVertices_;
     this->ShiftVertices(filanetprob, this->vtxs_shifted_);
 
-    std::ofstream partnersOutFile(this->outputFolderPath_ + this->fileName_ + "_partners.out");
-    for (auto partner : this->uniqueVertexEdgePartners_)
-    {
-      partnersOutFile << partner[0] << " "
-                      << partner[1] << std::endl;
-    }
-    partnersOutFile.close();
-    std::ofstream verticesOutFile(this->outputFolderPath_ + this->fileName_ + "_vertices.out");
-    for (auto vertexI = 0; vertexI < this->uniqueVertices_.size(); vertexI++)
-    {
-      verticesOutFile << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][0]) << " "
-                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][1]) << " "
-                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][2]) << " "
-                      << this->uniqueVertexOrders_[vertexI] << std::endl;
-    }
-    verticesOutFile.close();
-
-    std::ofstream nodesToEdgesOutFile(this->outputFolderPath_ + this->fileName_ + "_nodes_to_edges.out");
-    for (auto edges : this->node_to_edges_)
-    {
-      for(auto edge: edges)
-        nodesToEdgesOutFile << edge << " ";
-      nodesToEdgesOutFile << std::endl;
-    }
-    nodesToEdgesOutFile.close();
+    OutputGeometry();
   }
 
   double GetFilamentLength(
@@ -1848,5 +1386,479 @@ public:
                     this->uniqueVertexEdgePartners_.end(),
                     std::vector<unsigned int>{INT32_MAX, INT32_MAX}),
         this->uniqueVertexEdgePartners_.end());
+  }
+
+  void SimulatedAnnealing(FilamentNetworkProblem *filanetprob, std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
+  {
+
+    //*************************************************************************************
+    // DO SIMULATED ANNEALING
+    bool do_simulated_annealing = true;
+    if (not do_simulated_annealing)
+      return;
+    //*************************************************************************************
+
+    std::cout << "\n5) Starting Simulated Annealing\n\n\n";
+    // time measurement start
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Choose values for input parameters
+    unsigned const int max_iter = 5000;
+    unsigned const int max_subiter = 100;
+    double weight_line = 1.0;
+    double weight_cosine = 1.0;
+    const double tolerance = 0.01;
+    double temperature_inital = 0.05;
+    double decay_rate_temperature = 0.95;
+    double max_movement = 0.05 * this->boxsize_[0];
+    unsigned int screen_output_every = 1000;
+
+    // for binning
+    unsigned int p_num_bins_lengths = 1000;
+    unsigned int p_num_bins_cosines = 1000;
+
+    unsigned int num_nodes = uniqueVertices_map_.size();
+    unsigned int num_lines = uniqueVertexEdgePartners_.size();
+
+    // ... some more
+    // to select interchange movement
+    std::uniform_int_distribution<> dis_action(1, 2);
+    // to select random node
+    std::uniform_int_distribution<> dis_node(0, num_nodes - 1);
+    // to select random line
+    std::uniform_int_distribution<> dis_line(0, num_lines - 1);
+    // to select random node movement
+    std::uniform_real_distribution<> dis_node_move(-1, 1);
+
+    // ... and even more
+    std::vector<double> rand_new_node_pos(3, 0.0);
+    std::vector<std::vector<double>> uniqueVertices_backup(this->uniqueVertices_);
+    std::vector<std::vector<unsigned int>> uniqueVertexEdgePartners_backup(this->uniqueVertexEdgePartners_);
+    unsigned int random_line_1 = 0;
+    unsigned int random_line_2 = 0;
+    unsigned int iter = 0;
+    double curr_energy_line = 0.0;
+    double last_energy_line = 0.0;
+    double curr_energy_cosine = 0.0;
+    double last_energy_cosine = 0.0;
+    double temperature = temperature_inital;
+    double delta_energy = 0.0;
+    // normalize lengths according to Lindström
+    double length_norm_fac = 1.0 / std::pow((num_nodes / (this->boxsize_[0] * this->boxsize_[1] * this->boxsize_[2])), -1.0 / 3.0);
+
+    // for binning
+    std::vector<unsigned int> m_j_lengths;
+    std::vector<unsigned int> m_j_cosines;
+    double interval_size_lengths = 5.0 / p_num_bins_lengths;
+    double interval_size_cosines = 2.0 / p_num_bins_cosines;
+
+    // build uniqueVertices_to_Edge_map_
+    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    {
+      uniqueVertices_to_Edge_map_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
+      uniqueVertices_to_Edge_map_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+    }
+
+    // compute cosine distribution
+    std::vector<double> cosine_distribution(p_num_bins_cosines, 0.0);
+    std::vector<std::vector<double>> node_cosine_to_bin(uniqueVertices_.size(), std::vector<double>());
+    std::vector<double> dir_vec_1(3, 0.0);
+    std::vector<double> dir_vec_2(3, 0.0);
+    for (auto const &i_node : uniqueVertices_to_Edge_map_)
+    {
+      ComputeCosineDistributionOfNode(filanetprob, i_node.first, dir_vec_1, dir_vec_2,
+                                      interval_size_cosines, node_cosine_to_bin, cosine_distribution);
+    }
+    std::vector<std::vector<double>> node_cosine_to_bin_backup(node_cosine_to_bin);
+
+    unsigned int num_cosines = 0;
+    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
+      num_cosines += cosine_distribution[i_c];
+
+    // compute length distribution
+    std::vector<double> length_distribution(p_num_bins_lengths, 0.0);
+    std::vector<double> edge_length_to_bin(uniqueVertexEdgePartners_.size(), -1.0);
+    for (unsigned int i_edge = 0; i_edge < num_lines; ++i_edge)
+    {
+      UpdateLengthDistributionOfLine(filanetprob, i_edge, length_norm_fac, dir_vec_1,
+                                     interval_size_lengths, edge_length_to_bin, length_distribution);
+    }
+    std::vector<double> edge_length_to_bin_backup(edge_length_to_bin);
+
+    // compute for first iteration
+    EnergyLineLindstrom(last_energy_line, num_lines, interval_size_lengths, length_distribution);
+    EnergyCosineLindstrom(last_energy_cosine, interval_size_cosines, cosine_distribution, num_cosines);
+
+    // write initial distributions
+    // output initial filament lengths
+    std::ofstream filLen_file_initial(this->geometryPathPrefix_ + "_fil_lengths_initial.txt");
+    filLen_file_initial << "fil_lengths\n";
+    for (unsigned int filId = 0; filId < this->uniqueVertexEdgePartners_.size(); ++filId)
+      filLen_file_initial << this->GetFilamentLength(filId) * length_norm_fac << "\n";
+
+    // print final cosine distribution
+    std::ofstream filcoshisto_initial_file(this->geometryPathPrefix_ + "_cosine_histo_initial.txt");
+    filcoshisto_initial_file << "cosine\n";
+    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
+      for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
+        filcoshisto_initial_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
+
+    // write temperature and energies to file
+    std::ofstream fil_obj_function(this->geometryPathPrefix_ + "_obj_function.txt");
+    fil_obj_function << "step, temperature, length, cosine, total \n";
+
+    //---------------------------
+    // START SIMULATED ANNEALING
+    //---------------------------
+    do
+    {
+      unsigned int action = 1; //dis_action(gen);
+
+      // ************************************************
+      // type one: move random point in random direction
+      // ************************************************
+      if (action == 1)
+      {
+        bool success = true;
+        unsigned int subiter = 0;
+        do
+        {
+          ++subiter;
+          success = true;
+          // select a random node
+          unsigned int rand_node_id = uniqueVertices_for_random_draw_[dis_node(gen)];
+
+          // update position of this vertex
+          for (unsigned int idim = 0; idim < 3; ++idim)
+          {
+            this->uniqueVertices_[rand_node_id][idim] += dis_node_move(gen) * max_movement;
+          }
+
+          // recompute length and cosine distribution of affected nodes
+          std::set<unsigned int> affected_nodes;
+          std::set<unsigned int> affected_lines;
+          for (auto const &iter_edges : node_to_edges_[rand_node_id])
+          {
+            affected_nodes.insert(this->uniqueVertexEdgePartners_[iter_edges][0]);
+            affected_nodes.insert(this->uniqueVertexEdgePartners_[iter_edges][1]);
+            affected_lines.insert(iter_edges);
+
+            // check if line is longer than 1/3 of boxlength (we do not want this to
+            // ensure that our RVE stays representative)
+            if (GetEdgeLength(iter_edges) / length_norm_fac > one_third * this->boxsize_[0])
+            {
+              success = false;
+              break;
+            }
+          }
+
+          if (success == false)
+          {
+            RevertUpdateOfNodes(affected_nodes, uniqueVertices_backup);
+            continue;
+          }
+
+          for (auto const &iter_nodes : affected_nodes)
+            ComputeCosineDistributionOfNode(filanetprob, iter_nodes, dir_vec_1, dir_vec_2,
+                                            interval_size_cosines, node_cosine_to_bin, cosine_distribution);
+
+          for (auto const &iter_edges : affected_lines)
+            UpdateLengthDistributionOfLine(filanetprob, iter_edges, length_norm_fac, dir_vec_1,
+                                           interval_size_lengths, edge_length_to_bin, length_distribution);
+
+          // compute energies
+          // 1.) line
+          EnergyLineLindstrom(curr_energy_line, num_lines, interval_size_lengths, length_distribution);
+
+          // 2.) cosine
+          EnergyCosineLindstrom(curr_energy_cosine, interval_size_cosines, cosine_distribution, num_cosines);
+
+          // compute delta E
+          delta_energy = weight_line * (curr_energy_line - last_energy_line) +
+                         weight_cosine * (curr_energy_cosine - last_energy_cosine);
+
+          if ((delta_energy < 0.0) or (dis_uni(gen) < std::exp(-delta_energy / temperature)))
+          {
+            last_energy_line = curr_energy_line;
+            last_energy_cosine = curr_energy_cosine;
+            UpdateBackUpOfNodes(affected_nodes, uniqueVertices_backup);
+            UpdateBackupOfCosineDistribution(affected_nodes, node_cosine_to_bin, node_cosine_to_bin_backup);
+            UpdateBackupOfLineDistribution(affected_lines, edge_length_to_bin, edge_length_to_bin_backup);
+            success = true;
+          }
+          else
+          {
+            RevertUpdateOfNodes(affected_nodes, uniqueVertices_backup);
+            RevertComputeCosineDistributionOfNode(affected_nodes, cosine_distribution, node_cosine_to_bin, node_cosine_to_bin_backup);
+            RevertUpdateLengthDistributionOfLine(affected_lines, length_distribution, edge_length_to_bin, edge_length_to_bin_backup);
+            success = false;
+          }
+        } while ((success == false) and (subiter < max_subiter));
+
+        if (iter % screen_output_every == 0)
+        {
+          std::cout << "line energy move 1 " << curr_energy_line << std::endl;
+          std::cout << "cosine energy move 1 " << curr_energy_cosine << std::endl;
+          std::cout << " iter " << iter << std::endl;
+
+          fil_obj_function << iter;
+          fil_obj_function << ", " << temperature;
+          fil_obj_function << ", " << curr_energy_line;
+          fil_obj_function << ", " << curr_energy_cosine;
+          fil_obj_function << ", " << curr_energy_line + curr_energy_cosine << "\n";
+        }
+      }
+
+      // ************************************************
+      // type two: change connection of two lines
+      // ************************************************
+      else if (action == 2)
+      {
+        //      Current Conf.           Case_1             Case_2
+        //      _____________       _____________      ______________
+        //
+        //      1 o------o 2         1 o     o 2        1 o       o 2
+        //                              \   /             |       |
+        //                               \ /              |       |
+        //                                /               |       |
+        //                               /  \             |       |
+        //      3 o------o 4         3  o    o 4        3 o       o 4
+        //
+        //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        bool success = false;
+        unsigned int subiter = 0;
+        do
+        {
+          ++subiter;
+          success = true;
+
+          // select two (different) random lines
+          random_line_1 = dis_line(gen);
+          bool not_yet_found = true;
+          std::vector<unsigned int> nodes_line_1(2, 0);
+          std::vector<unsigned int> nodes_line_2(2, 0);
+
+          nodes_line_1[0] = uniqueVertexEdgePartners_[random_line_1][0];
+          nodes_line_1[1] = uniqueVertexEdgePartners_[random_line_1][1];
+
+          unsigned int control_iter = 0;
+          while (not_yet_found)
+          {
+            ++control_iter;
+            // prevent code from getting stuck in this loop
+            if (control_iter > 1e06)
+            {
+              std::cout << " Not able to find close enough second edge for option 2 " << std::endl;
+              exit(0);
+            }
+
+            random_line_2 = dis_line(gen);
+            nodes_line_2[0] = uniqueVertexEdgePartners_[random_line_2][0];
+            nodes_line_2[1] = uniqueVertexEdgePartners_[random_line_2][1];
+
+            // already check distance here
+            bool to_far_away = false;
+            for (unsigned int j = 0; j < 2; ++j)
+            {
+              if (l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * this->boxsize_[0] or
+                  l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * this->boxsize_[0])
+              {
+                to_far_away = true;
+                break;
+              }
+            }
+
+            if (to_far_away)
+              continue;
+
+            // check if lines share a node, if so, choose another one
+            if (not((nodes_line_1[0] == nodes_line_2[0]) or (nodes_line_1[0] == nodes_line_2[1]) or
+                    (nodes_line_1[1] == nodes_line_2[0]) or (nodes_line_1[1] == nodes_line_2[1])))
+              not_yet_found = false;
+          }
+
+          std::set<unsigned int> affected_nodes;
+          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_1][0]);
+          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_1][1]);
+          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_2][0]);
+          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_2][1]);
+
+          std::set<unsigned int> affected_lines;
+          affected_lines.insert(random_line_1);
+          affected_lines.insert(random_line_2);
+
+          // get all nodes that are connected to the respective four nodes
+          std::vector<std::set<unsigned int>> nodes_to_nodes_1(2, std::set<unsigned int>());
+          std::vector<std::set<unsigned int>> nodes_to_nodes_2(2, std::set<unsigned int>());
+
+          for (unsigned int j = 0; j < 2; ++j)
+          {
+            for (unsigned int k = 0; k < node_to_edges_[nodes_line_1[j]].size(); ++k)
+            {
+              nodes_to_nodes_1[j].insert(uniqueVertexEdgePartners_[k][0]);
+              nodes_to_nodes_1[j].insert(uniqueVertexEdgePartners_[k][1]);
+            }
+          }
+
+          for (unsigned int j = 0; j < 2; ++j)
+          {
+            for (unsigned int k = 0; k < node_to_edges_[nodes_line_2[j]].size(); ++k)
+            {
+              nodes_to_nodes_2[j].insert(uniqueVertexEdgePartners_[k][0]);
+              nodes_to_nodes_2[j].insert(uniqueVertexEdgePartners_[k][1]);
+            }
+          }
+
+          // decide which case is attempted first
+          //        int mov_case = dis_action(gen);
+
+          // we always try movement one first
+          bool move_one_sucess = true;
+
+          // next, check if one of the two new lines already exists for case 1
+          if ((nodes_to_nodes_1[0].count(nodes_line_2[1])) or (nodes_to_nodes_1[1].count(nodes_line_2[0])))
+            move_one_sucess = false;
+
+          // update new connectivity
+          if (move_one_sucess == true)
+          {
+            this->uniqueVertexEdgePartners_[random_line_1][1] = nodes_line_2[1];
+            this->uniqueVertexEdgePartners_[random_line_2][1] = nodes_line_1[1];
+          }
+
+          if (move_one_sucess == false)
+          {
+            // check if one of the two new lines already exists for case 2
+            if (nodes_to_nodes_1[0].count(nodes_line_2[0]) or nodes_to_nodes_1[1].count(nodes_line_2[1]))
+            {
+              success = false;
+              continue;
+            }
+
+            // update new connectivity
+            this->uniqueVertexEdgePartners_[random_line_1][1] = nodes_line_2[0];
+            this->uniqueVertexEdgePartners_[random_line_2][0] = nodes_line_1[1];
+          }
+
+          // update length distribution
+          UpdateLengthDistributionOfLine(filanetprob, random_line_1, length_norm_fac, dir_vec_1,
+                                         interval_size_lengths, edge_length_to_bin, length_distribution);
+          UpdateLengthDistributionOfLine(filanetprob, random_line_2, length_norm_fac, dir_vec_1,
+                                         interval_size_lengths, edge_length_to_bin, length_distribution);
+          // recompute cosine distribution of affected nodes
+          for (unsigned int j = 0; j < 2; ++j)
+          {
+            ComputeCosineDistributionOfNode(filanetprob, nodes_line_1[j], dir_vec_1, dir_vec_2,
+                                            interval_size_cosines, node_cosine_to_bin, cosine_distribution);
+            ComputeCosineDistributionOfNode(filanetprob, nodes_line_2[j], dir_vec_1, dir_vec_2,
+                                            interval_size_cosines, node_cosine_to_bin, cosine_distribution);
+          }
+
+          // compute energies
+          // 1.) line
+          EnergyLineLindstrom(curr_energy_line, num_lines, interval_size_lengths, length_distribution);
+
+          // 2.) cosine
+          EnergyCosineLindstrom(last_energy_cosine, interval_size_cosines, cosine_distribution, num_cosines);
+
+          // compute delta E
+          delta_energy = weight_line * (curr_energy_line - last_energy_line) +
+                         weight_cosine * (curr_energy_cosine - last_energy_cosine);
+
+          if ((delta_energy < 0.0) or (dis_uni(gen) < std::exp(-delta_energy / temperature)))
+          {
+            last_energy_line = curr_energy_line;
+            last_energy_cosine = curr_energy_cosine;
+            UpdateBackUpOfEdges(affected_lines, uniqueVertexEdgePartners_backup);
+            UpdateBackupOfCosineDistribution(affected_nodes, node_cosine_to_bin, node_cosine_to_bin_backup);
+            UpdateBackupOfLineDistribution(affected_lines, edge_length_to_bin, edge_length_to_bin_backup);
+            success = true;
+          }
+          else
+          {
+            RevertUpdateOfEdges(affected_lines, uniqueVertexEdgePartners_backup);
+            RevertComputeCosineDistributionOfNode(affected_nodes, cosine_distribution, node_cosine_to_bin, node_cosine_to_bin_backup);
+            RevertUpdateLengthDistributionOfLine(affected_lines, length_distribution, edge_length_to_bin, edge_length_to_bin_backup);
+            success = false;
+          }
+        } while (success == false and subiter < max_subiter);
+
+        // screen output
+        if (iter % screen_output_every == 0)
+        {
+          std::cout << "line energy move 2 " << curr_energy_line << std::endl;
+          std::cout << "cosine energy move 2 " << curr_energy_cosine << std::endl;
+          std::cout << " iter 2 " << iter << std::endl;
+        }
+      }
+
+      // neither movement one nor two
+      else
+      {
+        throw "You should not be here";
+      }
+
+      // according to Nan2018 (power law cooling schedule)
+      if (iter % 1000 == 0)
+      {
+        temperature = std::pow(decay_rate_temperature, iter / 1000.0) * temperature_inital;
+        std::cout << "temperature " << temperature << std::endl;
+      }
+
+      ++iter;
+    } while ((iter < max_iter) and ((last_energy_line > tolerance) or (last_energy_cosine > tolerance)));
+
+    // print final cosine distribution
+    std::ofstream filcoshisto_file(this->geometryPathPrefix_ + "_cosine_histo.txt");
+    filcoshisto_file << "cosine\n";
+    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
+      for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
+        filcoshisto_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
+
+    std::ofstream filcos_file(this->geometryPathPrefix_ + "_cosine_normal.txt");
+    filcos_file << "bin, cosine \n";
+    for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
+    {
+      filcos_file << interval_size_cosines * i_c + interval_size_cosines * 0.5;
+      filcos_file << ", " << cosine_distribution[i_c] - 1.0 << "\n";
+    }
+
+    // time measurement end
+    auto stop = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = stop - start;
+
+    std::cout << "\nSimulation annealing took " << elapsed.count() / 60 << " minutes for " << iter << " iterations" << std::endl;
+    std::cout << "Final line energy:   " << last_energy_line << std::endl;
+    std::cout << "Final cosine energy: " << last_energy_cosine << std::endl;
+  }
+
+  void OutputGeometry()
+  {
+    std::ofstream partnersOutFile(this->geometryPathPrefix_ + "_partners.out");
+    for (auto partner : this->uniqueVertexEdgePartners_)
+    {
+      partnersOutFile << partner[0] << " "
+                      << partner[1] << std::endl;
+    }
+    partnersOutFile.close();
+    std::ofstream verticesOutFile(this->geometryPathPrefix_ + "_vertices.out");
+    for (auto vertexI = 0; vertexI < this->uniqueVertices_.size(); vertexI++)
+    {
+      verticesOutFile << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][0]) << " "
+                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][1]) << " "
+                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][2]) << " "
+                      << this->uniqueVertexOrders_[vertexI] << std::endl;
+    }
+    verticesOutFile.close();
+
+    std::ofstream nodesToEdgesOutFile(this->geometryPathPrefix_ + "_nodes_to_edges.out");
+    for (auto edges : this->node_to_edges_)
+    {
+      for (auto edge : edges)
+        nodesToEdgesOutFile << edge << " ";
+      nodesToEdgesOutFile << std::endl;
+    }
+    nodesToEdgesOutFile.close();
   }
 };
