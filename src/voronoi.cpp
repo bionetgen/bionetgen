@@ -70,7 +70,21 @@ public:
       this->boxZeroPoint_.push_back(child.second.get_value<double>());
   }
 
-  void ComputeVoronoi(FilamentNetworkProblem *filanetprob)
+  void run(FilamentNetworkProblem *filanetprob) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    gen.seed(this->seed_);
+    // random number between 0 and 1
+    std::uniform_real_distribution<> dis_uni(0, 1);
+
+    this->ComputeVoronoi(filanetprob, gen, dis_uni);
+
+    this->SimulatedAnnealing(filanetprob, gen, dis_uni);
+
+    this->OutputGeometry();
+  }
+
+  void ComputeVoronoi(FilamentNetworkProblem *filanetprob, std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
   {
     std::cout << "\n\nNetwork Generation started." << std::endl;
     std::cout << "------------------------------------------------------\n"
@@ -78,12 +92,6 @@ public:
     std::cout << "1) Computing Voronoi.\n"
               << std::flush;
     auto start_voro = std::chrono::high_resolution_clock::now();
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    gen.seed(this->seed_);
-    // random number between 0 and 1
-    std::uniform_real_distribution<> dis_uni(0, 1);
 
     // reset variables in case of unsuccessful computation
     this->particlePositions_.clear();
@@ -765,15 +773,6 @@ public:
 
     int numberOfFilaments = this->uniqueVertexEdgePartners_.size();
     this->currnumfils_ = numberOfFilaments;
-
-    SimulatedAnnealing(filanetprob, gen, dis_uni);
-
-    // now that we are done shift one time again to provide the shifted coordinates
-    // for other functions
-    this->vtxs_shifted_ = this->uniqueVertices_;
-    this->ShiftVertices(filanetprob, this->vtxs_shifted_);
-
-    OutputGeometry();
   }
 
   double GetFilamentLength(

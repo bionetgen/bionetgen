@@ -8,6 +8,6 @@ int main(int argc, char const *argv[])
     std::string configFilePath = argv[1];
     loader.load(configFilePath);
     loader.configure(voronoi);
-    voronoi.ComputeVoronoi(filanetprob);
+    voronoi.run(filanetprob);
     return 0;
 }
