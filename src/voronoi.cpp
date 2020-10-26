@@ -537,11 +537,6 @@ public:
       node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
     }
 
-    // put all vertex ids in vector to ease random draw of vertex
-    uniqueVertices_for_random_draw_.reserve(uniqueVertices_map_.size());
-    for (auto const &iter : uniqueVertices_map_)
-      uniqueVertices_for_random_draw_.push_back(iter.first);
-
     auto stop_cleaning = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapses_cleaning = stop_cleaning - start_cleaning;
     std::cout << "   Cleaning is done now. It took " << elapses_cleaning.count() / 60 << " minutes. \n";
@@ -1208,6 +1203,11 @@ public:
 
     unsigned int num_nodes = this->uniqueVertices_map_.size();
     unsigned int num_lines = this->uniqueVertexEdgePartners_.size();
+
+    // put all vertex ids in vector to ease random draw of vertex
+    uniqueVertices_for_random_draw_.reserve(uniqueVertices_map_.size());
+    for (auto const &iter : uniqueVertices_map_)
+      uniqueVertices_for_random_draw_.push_back(iter.first);
 
     // Adapt valency distribution to collagen network according to Nan2018
     // "Realizations of highly heterogeneous collagen networks via stochastic reconstruction
