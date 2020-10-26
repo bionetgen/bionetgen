@@ -15,9 +15,6 @@
 #include "../libs/voro++-0.4.6/src/voro++.hh"
 #include "../lib/lib_vec.hpp"
 
-class FilamentNetworkProblem
-{
-};
 
 const double one_third = 1.0 / 3.0;
 
@@ -70,21 +67,21 @@ public:
       this->boxZeroPoint_.push_back(child.second.get_value<double>());
   }
 
-  void run(FilamentNetworkProblem *filanetprob) {
+  void run() {
     std::random_device rd;
     std::mt19937 gen(rd());
     gen.seed(this->seed_);
     // random number between 0 and 1
     std::uniform_real_distribution<> dis_uni(0, 1);
 
-    this->ComputeVoronoi(filanetprob, gen, dis_uni);
+    this->ComputeVoronoi(gen, dis_uni);
 
-    this->SimulatedAnnealing(filanetprob, gen, dis_uni);
+    this->SimulatedAnnealing(gen, dis_uni);
 
     this->OutputGeometry();
   }
 
-  void ComputeVoronoi(FilamentNetworkProblem *filanetprob, std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
+  void ComputeVoronoi(std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
   {
     std::cout << "\n\nNetwork Generation started." << std::endl;
     std::cout << "------------------------------------------------------\n"
@@ -260,12 +257,12 @@ public:
             }
 
             std::vector<bool> onPlanesPartner1 = std::vector<bool>{
-                this->VertexIsOnHighPlane(filanetprob, uniquePartner1PositionIndex, 0) ||
-                    this->VertexIsOnLowPlane(filanetprob, uniquePartner1PositionIndex, 0),
-                this->VertexIsOnHighPlane(filanetprob, uniquePartner1PositionIndex, 1) ||
-                    this->VertexIsOnLowPlane(filanetprob, uniquePartner1PositionIndex, 1),
-                this->VertexIsOnHighPlane(filanetprob, uniquePartner1PositionIndex, 2) ||
-                    this->VertexIsOnLowPlane(filanetprob, uniquePartner1PositionIndex, 2)};
+                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 0) ||
+                    this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 0),
+                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 1) ||
+                    this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 1),
+                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 2) ||
+                    this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 2)};
 
             unsigned int edgesCreated = 0;
             for (int partnerIndex = 0; partnerIndex < vertexOrders[vertexIndex]; ++partnerIndex)
@@ -324,17 +321,17 @@ public:
               {
                 //! OLD
                 std::vector<bool> onPlanesPartner2 = std::vector<bool>{
-                    this->VertexIsOnHighPlane(filanetprob,
+                    this->VertexIsOnHighPlane(
                                               uniquePartner2PositionIndex, 0) ||
-                        this->VertexIsOnLowPlane(filanetprob,
+                        this->VertexIsOnLowPlane(
                                                  uniquePartner2PositionIndex, 0),
-                    this->VertexIsOnHighPlane(filanetprob,
+                    this->VertexIsOnHighPlane(
                                               uniquePartner2PositionIndex, 1) ||
-                        this->VertexIsOnLowPlane(filanetprob,
+                        this->VertexIsOnLowPlane(
                                                  uniquePartner2PositionIndex, 1),
-                    this->VertexIsOnHighPlane(filanetprob,
+                    this->VertexIsOnHighPlane(
                                               uniquePartner2PositionIndex, 2) ||
-                        this->VertexIsOnLowPlane(filanetprob,
+                        this->VertexIsOnLowPlane(
                                                  uniquePartner2PositionIndex, 2)};
 
                 // 1 1 1 1
@@ -443,7 +440,7 @@ public:
 
     //! NEW shifting to add all filaments that are not present on both periodic
     //! boundaries
-    // this->ShiftEdges(filanetprob, this->uniqueVertexEdgePartners_,
+    // this->ShiftEdges(this->uniqueVertexEdgePartners_,
     // this->uniqueVertices_);
     //! this breaks calc of fiber vol frac
 
@@ -464,7 +461,7 @@ public:
 
     //! Careful: creates dead nodes! (vertices still exist!)
     // if (this->applyPeriodicBCsPerDim_[0] or this->applyPeriodicBCsPerDim_[1] or this->applyPeriodicBCsPerDim_[2])
-    this->RemoveDoubles(filanetprob);
+    this->RemoveDoubles();
 
     auto stop_removing_doubles = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed_removing_doubles = stop_removing_doubles - start_removing_doubles;
@@ -485,7 +482,7 @@ public:
     // Compute Vertex order
     uniqueVertices_map_.clear();
     this->vtxs_shifted_ = this->uniqueVertices_;
-    this->ShiftVertices(filanetprob, this->vtxs_shifted_);
+    this->ShiftVertices(this->vtxs_shifted_);
 
     std::vector<unsigned int> vertices_with_order_1;
     std::vector<unsigned int> vertices_with_order_3;
@@ -799,23 +796,23 @@ public:
   }
 
   bool VertexIsOnHighPlane(
-      FilamentNetworkProblem *filanetprob, unsigned int vertexUId,
+      unsigned int vertexUId,
       unsigned int dimension) const
   {
-    return this->PointIsOnHighPlane(filanetprob, this->uniqueVertices_[vertexUId],
+    return this->PointIsOnHighPlane(this->uniqueVertices_[vertexUId],
                                     dimension);
   }
 
   bool VertexIsOnLowPlane(
-      FilamentNetworkProblem *filanetprob, unsigned int vertexUId,
+      unsigned int vertexUId,
       unsigned int dimension) const
   {
-    return this->PointIsOnLowPlane(filanetprob, this->uniqueVertices_[vertexUId],
+    return this->PointIsOnLowPlane(this->uniqueVertices_[vertexUId],
                                    dimension);
   }
 
   bool PointIsOverHighPlane(
-      FilamentNetworkProblem *filanetprob, std::vector<double> const &point,
+      std::vector<double> const &point,
       unsigned int dimension) const
   {
     return (this->boxZeroPoint_[dimension] +
@@ -823,7 +820,7 @@ public:
   }
 
   bool PointIsOverLowPlane(
-      FilamentNetworkProblem *filanetprob,
+      
       std::vector<double> const &point,
       unsigned int dimension) const
   {
@@ -832,7 +829,7 @@ public:
   }
 
   bool PointIsOnHighPlane(
-      FilamentNetworkProblem *filanetprob, std::vector<double> const &point,
+      std::vector<double> const &point,
       unsigned int dimension) const
   {
     double compareTolerance = 1e-13;
@@ -842,7 +839,7 @@ public:
   }
 
   bool PointIsOnLowPlane(
-      FilamentNetworkProblem *filanetprob, std::vector<double> const &point,
+      std::vector<double> const &point,
       unsigned int dimension) const
   {
     double compareTolerance = 1e-13;
@@ -867,7 +864,7 @@ public:
   }
 
   std::vector<unsigned int> ShiftVertices(
-      FilamentNetworkProblem *filanetprob,
+      
       std::vector<std::vector<double>> &vertices) const
   {
     std::vector<unsigned int> shifted_lines;
@@ -879,14 +876,14 @@ public:
         if (!true)
           continue;
 
-        if (this->PointIsOverHighPlane(filanetprob, vertices[i], dim))
+        if (this->PointIsOverHighPlane(vertices[i], dim))
         {
           this->ShiftPointDown(vertices[i], this->boxsize_, dim);
           for (unsigned int k = 0; k < node_to_edges_[i].size(); ++k)
             shifted_lines.push_back(node_to_edges_[i][k]);
         }
 
-        else if (this->PointIsOverLowPlane(filanetprob, vertices[i], dim))
+        else if (this->PointIsOverLowPlane(vertices[i], dim))
         {
           this->ShiftPointUp(vertices[i], this->boxsize_, dim);
 
@@ -943,7 +940,7 @@ public:
       UnShift1D(dim, d[dim], ref[dim], X[dim]);
   }
 
-  void get_unshifted_dir_vec(FilamentNetworkProblem *filanetprob,
+  void get_unshifted_dir_vec(
                              std::vector<double> x_1, std::vector<double> const &x_2, std::vector<double> &dirvec) const
   {
     UnShift3D(x_1, x_2);
@@ -987,7 +984,7 @@ public:
     }
     return sqrt(accum);
   }
-  double l2_norm_dist_two_points(FilamentNetworkProblem *filanetprob,
+  double l2_norm_dist_two_points(
                                  std::vector<double> x_1, std::vector<double> const &x_2) const
   {
     UnShift3D(x_1, x_2);
@@ -1000,7 +997,7 @@ public:
   }
 
   void ComputeCosineDistributionOfNode(
-      FilamentNetworkProblem *filanetprob,
+      
       const unsigned int i_node,
       std::vector<double> &dir_vec_1,
       std::vector<double> &dir_vec_2,
@@ -1024,10 +1021,10 @@ public:
       for (unsigned int idim = 0; idim < 3; ++idim)
       {
         if (this->uniqueVertexEdgePartners_[edge_1][0] == i_node)
-          get_unshifted_dir_vec(filanetprob, uniqueVertices_[uniqueVertexEdgePartners_[edge_1][1]],
+          get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_1][1]],
                                 uniqueVertices_[uniqueVertexEdgePartners_[edge_1][0]], dir_vec_1);
         else
-          get_unshifted_dir_vec(filanetprob, uniqueVertices_[uniqueVertexEdgePartners_[edge_1][0]],
+          get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_1][0]],
                                 uniqueVertices_[uniqueVertexEdgePartners_[edge_1][1]], dir_vec_1);
       }
 
@@ -1040,10 +1037,10 @@ public:
         for (unsigned int idim = 0; idim < 3; ++idim)
         {
           if (this->uniqueVertexEdgePartners_[edge_2][0] == i_node)
-            get_unshifted_dir_vec(filanetprob, uniqueVertices_[uniqueVertexEdgePartners_[edge_2][1]],
+            get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_2][1]],
                                   uniqueVertices_[uniqueVertexEdgePartners_[edge_2][0]], dir_vec_2);
           else
-            get_unshifted_dir_vec(filanetprob, uniqueVertices_[uniqueVertexEdgePartners_[edge_2][0]],
+            get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_2][0]],
                                   uniqueVertices_[uniqueVertexEdgePartners_[edge_2][1]], dir_vec_2);
         }
 
@@ -1063,7 +1060,7 @@ public:
   /*----------------------------------------------------------------------*
  *----------------------------------------------------------------------*/
   void UpdateLengthDistributionOfLine(
-      FilamentNetworkProblem *filanetprob,
+      
       const unsigned int i_edge,
       double length_norm_fac,
       std::vector<double> &dir_vec_1,
@@ -1077,7 +1074,7 @@ public:
     unsigned int node_1 = this->uniqueVertexEdgePartners_[i_edge][0];
     unsigned int node_2 = this->uniqueVertexEdgePartners_[i_edge][1];
 
-    double curr_new_length = l2_norm_dist_two_points(filanetprob, this->uniqueVertices_[node_1],
+    double curr_new_length = l2_norm_dist_two_points(this->uniqueVertices_[node_1],
                                                      this->uniqueVertices_[node_2]) *
                              length_norm_fac;
 
@@ -1262,12 +1259,12 @@ public:
     curr_energy_cosine *= 1.0 / (num_cosines * num_cosines);
   }
 
-  void RemoveDoubles(FilamentNetworkProblem *filanetprob)
+  void RemoveDoubles()
   {
     auto start_remove = std::chrono::high_resolution_clock::now();
     std::vector<std::vector<double>> vtxs_shifted = this->uniqueVertices_;
 
-    std::vector<unsigned int> shifted_lines = this->ShiftVertices(filanetprob, vtxs_shifted);
+    std::vector<unsigned int> shifted_lines = this->ShiftVertices(vtxs_shifted);
 
     //  // make unique
     //  std::set<int> s;
@@ -1375,7 +1372,7 @@ public:
         this->uniqueVertexEdgePartners_.end());
   }
 
-  void SimulatedAnnealing(FilamentNetworkProblem *filanetprob, std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
+  void SimulatedAnnealing(std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
   {
 
     //*************************************************************************************
@@ -1453,7 +1450,7 @@ public:
     std::vector<double> dir_vec_2(3, 0.0);
     for (auto const &i_node : uniqueVertices_to_Edge_map_)
     {
-      ComputeCosineDistributionOfNode(filanetprob, i_node.first, dir_vec_1, dir_vec_2,
+      ComputeCosineDistributionOfNode(i_node.first, dir_vec_1, dir_vec_2,
                                       interval_size_cosines, node_cosine_to_bin, cosine_distribution);
     }
     std::vector<std::vector<double>> node_cosine_to_bin_backup(node_cosine_to_bin);
@@ -1467,7 +1464,7 @@ public:
     std::vector<double> edge_length_to_bin(uniqueVertexEdgePartners_.size(), -1.0);
     for (unsigned int i_edge = 0; i_edge < num_lines; ++i_edge)
     {
-      UpdateLengthDistributionOfLine(filanetprob, i_edge, length_norm_fac, dir_vec_1,
+      UpdateLengthDistributionOfLine(i_edge, length_norm_fac, dir_vec_1,
                                      interval_size_lengths, edge_length_to_bin, length_distribution);
     }
     std::vector<double> edge_length_to_bin_backup(edge_length_to_bin);
@@ -1546,11 +1543,11 @@ public:
           }
 
           for (auto const &iter_nodes : affected_nodes)
-            ComputeCosineDistributionOfNode(filanetprob, iter_nodes, dir_vec_1, dir_vec_2,
+            ComputeCosineDistributionOfNode(iter_nodes, dir_vec_1, dir_vec_2,
                                             interval_size_cosines, node_cosine_to_bin, cosine_distribution);
 
           for (auto const &iter_edges : affected_lines)
-            UpdateLengthDistributionOfLine(filanetprob, iter_edges, length_norm_fac, dir_vec_1,
+            UpdateLengthDistributionOfLine(iter_edges, length_norm_fac, dir_vec_1,
                                            interval_size_lengths, edge_length_to_bin, length_distribution);
 
           // compute energies
@@ -1648,8 +1645,8 @@ public:
             bool to_far_away = false;
             for (unsigned int j = 0; j < 2; ++j)
             {
-              if (l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * this->boxsize_[0] or
-                  l2_norm_dist_two_points(filanetprob, uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * this->boxsize_[0])
+              if (l2_norm_dist_two_points(uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * this->boxsize_[0] or
+                  l2_norm_dist_two_points(uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * this->boxsize_[0])
               {
                 to_far_away = true;
                 break;
@@ -1729,16 +1726,16 @@ public:
           }
 
           // update length distribution
-          UpdateLengthDistributionOfLine(filanetprob, random_line_1, length_norm_fac, dir_vec_1,
+          UpdateLengthDistributionOfLine(random_line_1, length_norm_fac, dir_vec_1,
                                          interval_size_lengths, edge_length_to_bin, length_distribution);
-          UpdateLengthDistributionOfLine(filanetprob, random_line_2, length_norm_fac, dir_vec_1,
+          UpdateLengthDistributionOfLine(random_line_2, length_norm_fac, dir_vec_1,
                                          interval_size_lengths, edge_length_to_bin, length_distribution);
           // recompute cosine distribution of affected nodes
           for (unsigned int j = 0; j < 2; ++j)
           {
-            ComputeCosineDistributionOfNode(filanetprob, nodes_line_1[j], dir_vec_1, dir_vec_2,
+            ComputeCosineDistributionOfNode(nodes_line_1[j], dir_vec_1, dir_vec_2,
                                             interval_size_cosines, node_cosine_to_bin, cosine_distribution);
-            ComputeCosineDistributionOfNode(filanetprob, nodes_line_2[j], dir_vec_1, dir_vec_2,
+            ComputeCosineDistributionOfNode(nodes_line_2[j], dir_vec_1, dir_vec_2,
                                             interval_size_cosines, node_cosine_to_bin, cosine_distribution);
           }
 
