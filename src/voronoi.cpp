@@ -1525,7 +1525,7 @@ public:
     //---------------------------
     do
     {
-      unsigned int action = mode; //dis_action(gen);
+      unsigned int action = mode;
 
       // ************************************************
       // type one: move random point in random direction
