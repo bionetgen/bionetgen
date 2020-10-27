@@ -8,10 +8,9 @@ set(CMAKE_BUILD_DIRECTORY build)
 
 set (CMAKE_CXX_STANDARD 11)
 file(GLOB Voropp_SRC_DIRS "libs/voro++-0.4.6/src")
-file(GLOB Blocks_SRC_DIRS "libs/blocks/src")
 file(GLOB Boost_LIB_DIRS "/lnm/lib/Q1_2015/boost/lib")
 
-link_directories(${Boost_LIB_DIRS} ${Voropp_SRC_DIRS} ${Blocks_SRC_DIRS})
+link_directories(${Boost_LIB_DIRS} ${Voropp_SRC_DIRS})
 
 file(GLOB SOURCES "src/*.cpp")
 add_executable(voronoi ${SOURCES})
@@ -21,11 +20,8 @@ add_custom_target(
    COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/libs/voro++-0.4.6/
 )
 
-add_library(blocks STATIC ${Blocks_SRC_DIRS})
-set_target_properties(blocks PROPERTIES LINKER_LANGUAGE CXX)
-
-target_link_libraries(voronoi boost_math_c99l boost_filesystem boost_system voro++ blocks)
-add_dependencies(voronoi voropp blocks)
+target_link_libraries(voronoi boost_math_c99l boost_filesystem boost_system voro++)
+add_dependencies(voronoi voropp)
  
 # configure_file(CTestCustom.ctest CTestCustom.ctest)
 # add_test(straight_filaments_b3r_lin2 bash -c "../run_test.sh straight_filaments_b3r_lin2.sh straight_filaments_b3r_lin2")
