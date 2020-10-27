@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.18.0)
+cmake_minimum_required(VERSION 3.8.0)
 project(input_generator VERSION 0.0.0)
 
 include(CTest)
