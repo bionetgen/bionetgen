@@ -15,7 +15,6 @@
 #include "../libs/voro++-0.4.6/src/voro++.hh"
 #include "../lib/lib_vec.hpp"
 
-
 const double one_third = 1.0 / 3.0;
 
 class Voronoi
@@ -118,7 +117,8 @@ public:
     this->p_num_bins_cosines = config_sa.get<uint>("num-bins-cosine");
   }
 
-  void run() {
+  void run()
+  {
     std::random_device rd;
     std::mt19937 gen(rd());
     gen.seed(this->seed_);
@@ -261,16 +261,11 @@ public:
             // statistical
             double radius =
                 std::sqrt((cellVertices[vertexIndex][0] - this->particlePositions_[cellIndex][0]) *
-                              (cellVertices[vertexIndex][0] -
-                               this->particlePositions_[cellIndex][0]) +
-                          (cellVertices[vertexIndex][1] -
-                           this->particlePositions_[cellIndex][1]) *
-                              (cellVertices[vertexIndex][1] -
-                               this->particlePositions_[cellIndex][1]) +
-                          (cellVertices[vertexIndex][2] -
-                           this->particlePositions_[cellIndex][2]) *
-                              (cellVertices[vertexIndex][2] -
-                               this->particlePositions_[cellIndex][2]));
+                              (cellVertices[vertexIndex][0] - this->particlePositions_[cellIndex][0]) +
+                          (cellVertices[vertexIndex][1] - this->particlePositions_[cellIndex][1]) *
+                              (cellVertices[vertexIndex][1] - this->particlePositions_[cellIndex][1]) +
+                          (cellVertices[vertexIndex][2] - this->particlePositions_[cellIndex][2]) *
+                              (cellVertices[vertexIndex][2] - this->particlePositions_[cellIndex][2]));
             cellRads.push_back(radius);
             avgRad += radius;
             if (radius > maxRad)
@@ -312,12 +307,9 @@ public:
             }
 
             std::vector<bool> onPlanesPartner1 = std::vector<bool>{
-                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 0) ||
-                    this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 0),
-                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 1) ||
-                    this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 1),
-                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 2) ||
-                    this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 2)};
+                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 0) || this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 0),
+                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 1) || this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 1),
+                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 2) || this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 2)};
 
             unsigned int edgesCreated = 0;
             for (int partnerIndex = 0; partnerIndex < vertexOrders[vertexIndex]; ++partnerIndex)
@@ -376,18 +368,9 @@ public:
               {
                 //! OLD
                 std::vector<bool> onPlanesPartner2 = std::vector<bool>{
-                    this->VertexIsOnHighPlane(
-                                              uniquePartner2PositionIndex, 0) ||
-                        this->VertexIsOnLowPlane(
-                                                 uniquePartner2PositionIndex, 0),
-                    this->VertexIsOnHighPlane(
-                                              uniquePartner2PositionIndex, 1) ||
-                        this->VertexIsOnLowPlane(
-                                                 uniquePartner2PositionIndex, 1),
-                    this->VertexIsOnHighPlane(
-                                              uniquePartner2PositionIndex, 2) ||
-                        this->VertexIsOnLowPlane(
-                                                 uniquePartner2PositionIndex, 2)};
+                    this->VertexIsOnHighPlane(uniquePartner2PositionIndex, 0) || this->VertexIsOnLowPlane(uniquePartner2PositionIndex, 0),
+                    this->VertexIsOnHighPlane(uniquePartner2PositionIndex, 1) || this->VertexIsOnLowPlane(uniquePartner2PositionIndex, 1),
+                    this->VertexIsOnHighPlane(uniquePartner2PositionIndex, 2) || this->VertexIsOnLowPlane(uniquePartner2PositionIndex, 2)};
 
                 // 1 1 1 1
                 if ((!true && onPlanesPartner1[0] && onPlanesPartner2[0]) ||
@@ -683,7 +666,7 @@ public:
   }
 
   bool PointIsOverLowPlane(
-      
+
       std::vector<double> const &point,
       unsigned int dimension) const
   {
@@ -727,7 +710,7 @@ public:
   }
 
   std::vector<unsigned int> ShiftVertices(
-      
+
       std::vector<std::vector<double>> &vertices) const
   {
     std::vector<unsigned int> shifted_lines;
@@ -804,7 +787,7 @@ public:
   }
 
   void get_unshifted_dir_vec(
-                             std::vector<double> x_1, std::vector<double> const &x_2, std::vector<double> &dirvec) const
+      std::vector<double> x_1, std::vector<double> const &x_2, std::vector<double> &dirvec) const
   {
     UnShift3D(x_1, x_2);
 
@@ -848,7 +831,7 @@ public:
     return sqrt(accum);
   }
   double l2_norm_dist_two_points(
-                                 std::vector<double> x_1, std::vector<double> const &x_2) const
+      std::vector<double> x_1, std::vector<double> const &x_2) const
   {
     UnShift3D(x_1, x_2);
     std::vector<double> dirvec(3, 0.0);
@@ -860,7 +843,7 @@ public:
   }
 
   void ComputeCosineDistributionOfNode(
-      
+
       const unsigned int i_node,
       std::vector<double> &dir_vec_1,
       std::vector<double> &dir_vec_2,
@@ -923,7 +906,7 @@ public:
   /*----------------------------------------------------------------------*
  *----------------------------------------------------------------------*/
   void UpdateLengthDistributionOfLine(
-      
+
       const unsigned int i_edge,
       double length_norm_fac,
       std::vector<double> &dir_vec_1,
@@ -1824,7 +1807,7 @@ public:
       }
 
       // neither movement one nor two
-      if(action != 1 && action != 2 && action != 3)
+      if (action != 1 && action != 2 && action != 3)
       {
         throw "You should not be here";
       }
