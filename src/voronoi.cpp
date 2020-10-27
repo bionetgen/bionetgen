@@ -20,6 +20,9 @@ const double one_third = 1.0 / 3.0;
 
 class Voronoi
 {
+  bool generate_;
+  bool simulate_;
+  uint mode_;
   std::string outputPrefix_;
   std::string inputPrefix_;
   std::vector<double> boxsize_;
@@ -49,8 +52,19 @@ class Voronoi
   std::vector<std::vector<double>> vtxs_shifted_;
   // contains all finite element node ids that belong to vertex
   std::vector<std::vector<unsigned int>> vertexNodeIds_ = std::vector<std::vector<unsigned int>>();
-  bool generate_;
-  bool simulate_;
+  // Input parameters for Simulated Annealing
+  unsigned int max_iter;
+  unsigned int max_subiter;
+  double weight_line;
+  double weight_cosine;
+  double tolerance;
+  double temperature_inital;
+  double decay_rate_temperature;
+  double max_movement;
+  unsigned int screen_output_every;
+  // for binning
+  unsigned int p_num_bins_lengths;
+  unsigned int p_num_bins_cosines;
 
 public:
   void configure(boost::property_tree::ptree config)
@@ -76,6 +90,32 @@ public:
       this->boxsize_.push_back(child.second.get_value<double>());
     for (auto child : config.get_child("box-origin"))
       this->boxZeroPoint_.push_back(child.second.get_value<double>());
+
+    // Simulated Annealing
+    auto config_sa = config.get_child("simulated-annealing");
+    std::string mode = config_sa.get<std::string>("mode");
+    if (mode == "1")
+      this->mode_ = 1;
+    else if (mode == "2")
+      this->mode_ = 2;
+    else if (mode == "both")
+      this->mode_ = 3;
+    else
+      throw "Invalid mode. Can only be '1', '2' or 'both'.";
+    this->max_iter = config_sa.get<uint>("max-iter");
+    this->max_subiter = config_sa.get<uint>("max-subiter");
+    this->weight_line = config_sa.get<double>("weight-line");
+    this->weight_cosine = config_sa.get<double>("weight-cosine");
+    this->tolerance = config_sa.get<double>("tolerance");
+    this->temperature_inital = config_sa.get<double>("temperature-initial");
+    this->decay_rate_temperature = config_sa.get<double>("temperature-decay-rate");
+    const double max_movementFrac = config_sa.get<double>("max-movement-frac");
+    this->max_movement = max_movementFrac * this->boxsize_[0];
+    this->screen_output_every = config_sa.get<uint>("screen-output-every");
+
+    // for binning
+    this->p_num_bins_lengths = config_sa.get<uint>("num-bins-length");
+    this->p_num_bins_cosines = config_sa.get<uint>("num-bins-cosine");
   }
 
   void run() {
@@ -91,7 +131,7 @@ public:
 
     gen.seed(this->seed_);
     if (this->simulate_)
-      this->SimulatedAnnealing(gen, dis_uni);
+      this->SimulatedAnnealing(this->mode_, gen, dis_uni);
 
     this->OutputGeometry();
   }
@@ -1388,7 +1428,7 @@ public:
     std::cout << "   Adaption of valency distribution is done now. It took " << elapsed_valency.count() / 60 << " minutes. \n";
   }
 
-  void SimulatedAnnealing(std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
+  void SimulatedAnnealing(uint mode, std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
   {
 
     // put all vertex ids in vector to ease random draw of vertex
@@ -1406,21 +1446,6 @@ public:
     std::cout << "\n5) Starting Simulated Annealing\n\n\n";
     // time measurement start
     auto start = std::chrono::high_resolution_clock::now();
-
-    // Choose values for input parameters
-    unsigned const int max_iter = 5000;
-    unsigned const int max_subiter = 100;
-    double weight_line = 1.0;
-    double weight_cosine = 1.0;
-    const double tolerance = 0.01;
-    double temperature_inital = 0.05;
-    double decay_rate_temperature = 0.95;
-    double max_movement = 0.05 * this->boxsize_[0];
-    unsigned int screen_output_every = 1000;
-
-    // for binning
-    unsigned int p_num_bins_lengths = 1000;
-    unsigned int p_num_bins_cosines = 1000;
 
     unsigned int num_nodes = uniqueVertices_map_.size();
     unsigned int num_lines = uniqueVertexEdgePartners_.size();
@@ -1517,12 +1542,12 @@ public:
     //---------------------------
     do
     {
-      unsigned int action = 1; //dis_action(gen);
+      unsigned int action = mode; //dis_action(gen);
 
       // ************************************************
       // type one: move random point in random direction
       // ************************************************
-      if (action == 1)
+      if (action == 1 || action == 3)
       {
         bool success = true;
         unsigned int subiter = 0;
@@ -1617,7 +1642,7 @@ public:
       // ************************************************
       // type two: change connection of two lines
       // ************************************************
-      else if (action == 2)
+      if (action == 2 || action == 3)
       {
         //      Current Conf.           Case_1             Case_2
         //      _____________       _____________      ______________
@@ -1799,7 +1824,7 @@ public:
       }
 
       // neither movement one nor two
-      else
+      if(action != 1 && action != 2 && action != 3)
       {
         throw "You should not be here";
       }

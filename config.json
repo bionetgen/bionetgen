@@ -14,5 +14,19 @@
         0,
         0,
         0
-    ]
+    ],
+    "simulated-annealing":{
+        "mode": 1,
+        "max-iter": 5000,
+        "max-subiter": 100,
+        "weight-line": 1.0,
+        "weight-cosine": 1.0,
+        "tolerance": 0.1,
+        "temperature-initial": 0.05,
+        "temperature-decay-rate": 0.95,
+        "max-movement-frac": 0.05,
+        "screen-output-every": 1000,
+        "num-bins-length": 1000,
+        "num-bins-cosine": 1000
+    }
 }
