@@ -1,4 +1,9 @@
 build/
-libs/
+
+# libvoro++
+voro++-0.4.6/src/*.o
+voro++-0.4.6/src/libvoro++.a
+voro++-0.4.6/src/voro++
+voro++-0.4.6/examples/**/*
 
 .vscode/

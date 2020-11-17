@@ -12,8 +12,8 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
-#include "../libs/voro++-0.4.6/src/voro++.hh"
-#include "../lib/lib_vec.hpp"
+#include "../voro++-0.4.6/src/voro++.hh"
+// #include "../lib/lib_vec.hpp"
 
 const double one_third = 1.0 / 3.0;
 
