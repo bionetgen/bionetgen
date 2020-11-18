@@ -525,8 +525,8 @@ public:
     std::vector<unsigned int> vertices_with_order_3;
     for (unsigned int i_node = 0; i_node < node_to_edges_.size(); ++i_node)
     {
-      if (node_to_edges_[i_node].size() == 4)
-        uniqueVertices_map_[i_node] = vtxs_shifted_[i_node];
+      // if (node_to_edges_[i_node].size() == 4)
+      //   uniqueVertices_map_[i_node] = vtxs_shifted_[i_node];
 
       if (node_to_edges_[i_node].size() == 1)
         vertices_with_order_1.push_back(i_node);
@@ -548,9 +548,40 @@ public:
           else
             uniqueVertexEdgePartners_[node_to_edges_[vertices_with_order_1[j]][0]][1] = vertices_with_order_3[i];
 
-          uniqueVertices_map_[vertices_with_order_3[i]] = vtxs_shifted_[vertices_with_order_3[i]];
+          // uniqueVertices_map_[vertices_with_order_3[i]] = vtxs_shifted_[vertices_with_order_3[i]];
         }
       }
+    }
+
+    //! remove 'dead' vertices
+    std::vector<bool> removeVertices = std::vector<bool>(uniqueVertices_.size(), true);
+    auto edgeId = 0;
+    for (auto &edge : this->uniqueVertexEdgePartners_)
+    {
+      removeVertices[edge[0]] = false;
+      removeVertices[edge[1]] = false;
+    }
+
+    auto finalSize = std::count_if(removeVertices.begin(), removeVertices.end(), [](bool remove) { return !remove; });
+    std::vector<uint> newVertexIds = std::vector<uint>(uniqueVertices_.size());
+    auto newVertices = std::vector<std::vector<double>>(finalSize);
+    auto newVertexId = 0;
+    for (uint vertexId = 0; vertexId < uniqueVertices_.size(); vertexId++)
+    {
+      if (!removeVertices[vertexId])
+      {
+        newVertexIds[vertexId] = newVertexId;
+        newVertices[newVertexId] = uniqueVertices_[vertexId];
+        uniqueVertices_map_[newVertexId] = vtxs_shifted_[vertexId];
+        newVertexId++;
+      }
+    }
+    uniqueVertices_ = newVertices;
+
+    for (auto &edge : this->uniqueVertexEdgePartners_)
+    {
+      edge[0] = newVertexIds[edge[0]];
+      edge[1] = newVertexIds[edge[1]];
     }
 
     node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
