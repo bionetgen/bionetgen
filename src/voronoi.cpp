@@ -1143,103 +1143,103 @@ public:
 
     std::vector<unsigned int> shifted_lines = this->ShiftVertices(vtxs_shifted);
 
-    //  // make unique
-    //  std::set<int> s;
-    //  unsigned size = shifted_lines.size();
-    //  for( unsigned int k = 0; k < size; ++k ) s.insert( shifted_lines[k] );
-    //  shifted_lines.assign( s.begin(), s.end() );
-    //
-    //  unsigned int count = 1;
-    //  for (unsigned int i = 0; i < shifted_lines.size(); ++i)
-    //  {
-    //    if ((uniqueVertexEdgePartners_[shifted_lines[i]][0] == INT32_MAX) || (uniqueVertexEdgePartners_[shifted_lines[i]][1] == INT32_MAX))
-    //    {
-    //      continue;
-    //    }
-    //
-    //    for (unsigned int j = 0; j < uniqueVertexEdgePartners_.size(); ++j)
-    //    {
-    //      if (shifted_lines[i] == j or
-    //          (uniqueVertexEdgePartners_[j][0] == INT32_MAX) or (uniqueVertexEdgePartners_[j][1] == INT32_MAX))
-    //      {
-    //        continue;
-    //      }
-    //      if ((uniqueVertexEdgePartners_[shifted_lines[i]][0] == INT32_MAX) || (uniqueVertexEdgePartners_[shifted_lines[i]][1] == INT32_MAX))
-    //      {
-    //        continue;
-    //      }
-    //
-    //      std::vector<double> edge1vtx1 = vtxs_shifted[uniqueVertexEdgePartners_[shifted_lines[i]][0]];
-    //      std::vector<double> edge1vtx2 = vtxs_shifted[uniqueVertexEdgePartners_[shifted_lines[i]][1]];
-    //      std::vector<double> edge2vtx1 = vtxs_shifted[uniqueVertexEdgePartners_[j][0]];
-    //      std::vector<double> edge2vtx2 = vtxs_shifted[uniqueVertexEdgePartners_[j][1]];
-    //
-    //      if ((this->VerticesMatch(edge1vtx1, edge2vtx1) && this->VerticesMatch(edge1vtx2, edge2vtx2)) ||
-    //          (this->VerticesMatch(edge1vtx1, edge2vtx2) && this->VerticesMatch(edge1vtx2, edge2vtx1)))
-    //      {
-    //        uniqueVertexEdgePartners_[shifted_lines[i] > j ? shifted_lines[i] : j ] = std::vector<unsigned int>{INT32_MAX, INT32_MAX};
-    //      }
-    //    }
-    //
-    //    if (i >= 0.05 * count * shifted_lines.size() - 1 )
-    //    {
-    //      auto stop_remove = std::chrono::high_resolution_clock::now();
-    //      std::chrono::duration<double> elapsed_remove = stop_remove - start_remove;
-    //      std::cout << "   " << elapsed_remove.count()/60 << " minutes needed for " << std::flush;
-    //      std::cout <<"   " << static_cast<int>(0.05 * count * 100.0) << " %\r" << std::flush;
-    //      ++count;
-    //    }
-    //  }
+     // make unique
+     std::set<int> s;
+     unsigned size = shifted_lines.size();
+     for( unsigned int k = 0; k < size; ++k ) s.insert( shifted_lines[k] );
+     shifted_lines.assign( s.begin(), s.end() );
+    
+     unsigned int count = 1;
+     for (unsigned int i = 0; i < shifted_lines.size(); ++i)
+     {
+       if ((uniqueVertexEdgePartners_[shifted_lines[i]][0] == INT32_MAX) || (uniqueVertexEdgePartners_[shifted_lines[i]][1] == INT32_MAX))
+       {
+         continue;
+       }
+    
+       for (unsigned int j = 0; j < uniqueVertexEdgePartners_.size(); ++j)
+       {
+         if (shifted_lines[i] == j or
+             (uniqueVertexEdgePartners_[j][0] == INT32_MAX) or (uniqueVertexEdgePartners_[j][1] == INT32_MAX))
+         {
+           continue;
+         }
+         if ((uniqueVertexEdgePartners_[shifted_lines[i]][0] == INT32_MAX) || (uniqueVertexEdgePartners_[shifted_lines[i]][1] == INT32_MAX))
+         {
+           continue;
+         }
+    
+         std::vector<double> edge1vtx1 = vtxs_shifted[uniqueVertexEdgePartners_[shifted_lines[i]][0]];
+         std::vector<double> edge1vtx2 = vtxs_shifted[uniqueVertexEdgePartners_[shifted_lines[i]][1]];
+         std::vector<double> edge2vtx1 = vtxs_shifted[uniqueVertexEdgePartners_[j][0]];
+         std::vector<double> edge2vtx2 = vtxs_shifted[uniqueVertexEdgePartners_[j][1]];
+    
+         if ((this->VerticesMatch(edge1vtx1, edge2vtx1) && this->VerticesMatch(edge1vtx2, edge2vtx2)) ||
+             (this->VerticesMatch(edge1vtx1, edge2vtx2) && this->VerticesMatch(edge1vtx2, edge2vtx1)))
+         {
+           uniqueVertexEdgePartners_[shifted_lines[i] > j ? shifted_lines[i] : j ] = std::vector<unsigned int>{INT32_MAX, INT32_MAX};
+         }
+       }
+    
+       if (i >= 0.05 * count * shifted_lines.size() - 1 )
+       {
+         auto stop_remove = std::chrono::high_resolution_clock::now();
+         std::chrono::duration<double> elapsed_remove = stop_remove - start_remove;
+         std::cout << "   " << elapsed_remove.count()/60 << " minutes needed for " << std::flush;
+         std::cout <<"   " << static_cast<int>(0.05 * count * 100.0) << " %\r" << std::flush;
+         ++count;
+       }
+     }
 
-    size_t edge1Id = 0;
-    unsigned int count = 1;
-    for (auto &edge1 : this->uniqueVertexEdgePartners_)
-    {
-      if ((edge1[0] == INT32_MAX) || (edge1[1] == INT32_MAX))
-      {
-        ++edge1Id;
-        continue;
-      }
+    // size_t edge1Id = 0;
+    // unsigned int count = 1;
+    // for (auto &edge1 : this->uniqueVertexEdgePartners_)
+    // {
+    //   if ((edge1[0] == INT32_MAX) || (edge1[1] == INT32_MAX))
+    //   {
+    //     ++edge1Id;
+    //     continue;
+    //   }
 
-      size_t edge2Id = 0;
-      for (auto &edge2 : this->uniqueVertexEdgePartners_)
-      {
-        if (edge1Id >= edge2Id)
-        {
-          ++edge2Id;
-          continue;
-        }
+    //   size_t edge2Id = 0;
+    //   for (auto &edge2 : this->uniqueVertexEdgePartners_)
+    //   {
+    //     if (edge1Id >= edge2Id)
+    //     {
+    //       ++edge2Id;
+    //       continue;
+    //     }
 
-        if ((edge2[0] == INT32_MAX) || (edge2[1] == INT32_MAX))
-        {
-          ++edge2Id;
-          continue;
-        }
+    //     if ((edge2[0] == INT32_MAX) || (edge2[1] == INT32_MAX))
+    //     {
+    //       ++edge2Id;
+    //       continue;
+    //     }
 
-        std::vector<double> edge1vtx1 = vtxs_shifted[edge1[0]];
-        std::vector<double> edge1vtx2 = vtxs_shifted[edge1[1]];
-        std::vector<double> edge2vtx1 = vtxs_shifted[edge2[0]];
-        std::vector<double> edge2vtx2 = vtxs_shifted[edge2[1]];
+    //     std::vector<double> edge1vtx1 = vtxs_shifted[edge1[0]];
+    //     std::vector<double> edge1vtx2 = vtxs_shifted[edge1[1]];
+    //     std::vector<double> edge2vtx1 = vtxs_shifted[edge2[0]];
+    //     std::vector<double> edge2vtx2 = vtxs_shifted[edge2[1]];
 
-        if ((this->VerticesMatch(edge1vtx1, edge2vtx1) && this->VerticesMatch(edge1vtx2, edge2vtx2)) ||
-            (this->VerticesMatch(edge1vtx1, edge2vtx2) && this->VerticesMatch(edge1vtx2, edge2vtx1)))
-        {
-          edge2 = std::vector<unsigned int>{INT32_MAX, INT32_MAX};
-        }
-        ++edge2Id;
-      }
+    //     if ((this->VerticesMatch(edge1vtx1, edge2vtx1) && this->VerticesMatch(edge1vtx2, edge2vtx2)) ||
+    //         (this->VerticesMatch(edge1vtx1, edge2vtx2) && this->VerticesMatch(edge1vtx2, edge2vtx1)))
+    //     {
+    //       edge2 = std::vector<unsigned int>{INT32_MAX, INT32_MAX};
+    //     }
+    //     ++edge2Id;
+    //   }
 
-      if (edge1Id >= 0.05 * count * uniqueVertexEdgePartners_.size() - 1)
-      {
-        auto stop_remove = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed_remove = stop_remove - start_remove;
-        std::cout << "   " << elapsed_remove.count() / 60 << " minutes needed for " << std::flush;
-        std::cout << "   " << static_cast<int>(0.05 * count * 100.0) << " %\r" << std::flush;
-        ++count;
-      }
+    //   if (edge1Id >= 0.05 * count * uniqueVertexEdgePartners_.size() - 1)
+    //   {
+    //     auto stop_remove = std::chrono::high_resolution_clock::now();
+    //     std::chrono::duration<double> elapsed_remove = stop_remove - start_remove;
+    //     std::cout << "   " << elapsed_remove.count() / 60 << " minutes needed for " << std::flush;
+    //     std::cout << "   " << static_cast<int>(0.05 * count * 100.0) << " %\r" << std::flush;
+    //     ++count;
+    //   }
 
-      ++edge1Id;
-    }
+    //   ++edge1Id;
+    // }
     std::cout << std::endl;
 
     this->uniqueVertexEdgePartners_.erase(
