@@ -21,8 +21,8 @@ class Voronoi
   bool generate_;
   bool simulate_;
   uint mode_;
-  std::string outputPrefix_;
-  std::string inputPrefix_;
+  boost::filesystem::path outputPrefix_;
+  boost::filesystem::path inputPrefix_;
   std::vector<double> boxsize_;
   std::vector<double> boxZeroPoint_;
   double seed_;
@@ -65,18 +65,16 @@ class Voronoi
   unsigned int p_num_bins_cosines;
 
 public:
-  void configure(boost::property_tree::ptree config)
+  void configure(boost::filesystem::path config_path, boost::property_tree::ptree config)
   {
-    this->outputPrefix_ = config.get<std::string>("output-prefix");
-    boost::filesystem::path op(outputPrefix_);
-    if (op.has_parent_path())
-      if (!boost::filesystem::exists(op.parent_path()))
-        boost::filesystem::create_directory(op.parent_path());
-    this->inputPrefix_ = config.get<std::string>("input-prefix");
-    boost::filesystem::path ip(inputPrefix_);
-    if (ip.has_parent_path())
-      if (!boost::filesystem::exists(ip.parent_path()))
-        boost::filesystem::create_directory(ip.parent_path());
+    this->outputPrefix_ = boost::filesystem::path(config_path) / boost::filesystem::path(config.get<std::string>("output-prefix"));
+    if (this->outputPrefix_.has_parent_path())
+      if (!boost::filesystem::exists(this->outputPrefix_.parent_path()))
+        boost::filesystem::create_directory(this->outputPrefix_.parent_path());
+    this->inputPrefix_ = boost::filesystem::path(config_path) / boost::filesystem::path(config.get<std::string>("input-prefix"));
+    if (this->inputPrefix_.has_parent_path())
+      if (!boost::filesystem::exists(this->inputPrefix_.parent_path()))
+        boost::filesystem::create_directory(this->inputPrefix_.parent_path());
 
     this->seed_ = config.get<double>("seed");
     this->voronoiParticleCount_ = config.get<uint>("particles");
@@ -1534,20 +1532,20 @@ public:
 
     // write initial distributions
     // output initial filament lengths
-    std::ofstream filLen_file_initial(this->outputPrefix_ + "_fil_lengths_initial.txt");
+    std::ofstream filLen_file_initial(this->outputPrefix_.string() + "_fil_lengths_initial.txt");
     filLen_file_initial << "fil_lengths\n";
     for (unsigned int filId = 0; filId < this->uniqueVertexEdgePartners_.size(); ++filId)
       filLen_file_initial << this->GetFilamentLength(filId) * length_norm_fac << "\n";
 
     // print final cosine distribution
-    std::ofstream filcoshisto_initial_file(this->outputPrefix_ + "_cosine_histo_initial.txt");
+    std::ofstream filcoshisto_initial_file(this->outputPrefix_.string() + "_cosine_histo_initial.txt");
     filcoshisto_initial_file << "cosine\n";
     for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
       for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
         filcoshisto_initial_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
 
     // write temperature and energies to file
-    std::ofstream fil_obj_function(this->outputPrefix_ + "_obj_function.txt");
+    std::ofstream fil_obj_function(this->outputPrefix_.string() + "_obj_function.txt");
     fil_obj_function << "step, temperature, length, cosine, total \n";
 
     //---------------------------
@@ -1853,13 +1851,13 @@ public:
     } while ((iter < max_iter) and ((last_energy_line > tolerance) or (last_energy_cosine > tolerance)));
 
     // print final cosine distribution
-    std::ofstream filcoshisto_file(this->outputPrefix_ + "_cosine_histo.txt");
+    std::ofstream filcoshisto_file(this->outputPrefix_.string() + "_cosine_histo.txt");
     filcoshisto_file << "cosine\n";
     for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
       for (unsigned int j_c = 0; j_c < cosine_distribution[i_c]; ++j_c)
         filcoshisto_file << interval_size_cosines * i_c + interval_size_cosines * 0.5 - 1.0 << "\n";
 
-    std::ofstream filcos_file(this->outputPrefix_ + "_cosine_normal.txt");
+    std::ofstream filcos_file(this->outputPrefix_.string() + "_cosine_normal.txt");
     filcos_file << "bin, cosine \n";
     for (unsigned int i_c = 0; i_c < cosine_distribution.size(); ++i_c)
     {
@@ -1878,14 +1876,14 @@ public:
 
   void OutputGeometry()
   {
-    std::ofstream partnersOutFile(this->outputPrefix_ + "_partners.out");
+    std::ofstream partnersOutFile(this->outputPrefix_.string() + "_partners.out");
     for (auto partner : this->uniqueVertexEdgePartners_)
     {
       partnersOutFile << partner[0] << " "
                       << partner[1] << std::endl;
     }
     partnersOutFile.close();
-    std::ofstream verticesOutFile(this->outputPrefix_ + "_vertices.out");
+    std::ofstream verticesOutFile(this->outputPrefix_.string() + "_vertices.out");
     for (auto vertexI = 0; vertexI < this->uniqueVertices_.size(); vertexI++)
     {
       verticesOutFile << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][0]) << " "
@@ -1895,7 +1893,7 @@ public:
     }
     verticesOutFile.close();
 
-    std::ofstream nodesToEdgesOutFile(this->outputPrefix_ + "_nodes_to_edges.out");
+    std::ofstream nodesToEdgesOutFile(this->outputPrefix_.string() + "_nodes_to_edges.out");
     for (auto edges : this->node_to_edges_)
     {
       for (auto edge : edges)
@@ -1913,7 +1911,7 @@ public:
     this->uniqueVertices_.clear();
     this->node_to_edges_.clear();
     std::string row;
-    std::ifstream verticesFile = std::ifstream(this->inputPrefix_ + "_vertices.out");
+    std::ifstream verticesFile = std::ifstream(this->inputPrefix_.string() + "_vertices.out");
     auto rowI = 0;
     while (!verticesFile.eof())
     {
@@ -1938,7 +1936,7 @@ public:
         this->uniqueVertices_map_.emplace(rowI, vertex);
       rowI++;
     }
-    std::ifstream partnersFile = std::ifstream(this->inputPrefix_ + "_partners.out");
+    std::ifstream partnersFile = std::ifstream(this->inputPrefix_.string() + "_partners.out");
     while (!partnersFile.eof())
     {
       std::getline(partnersFile, row);
@@ -1954,7 +1952,7 @@ public:
       this->uniqueVertexEdgePartners_.push_back(partners);
     }
 
-    std::ifstream nodesToEdgesFile = std::ifstream(this->inputPrefix_ + "_nodes_to_edges.out");
+    std::ifstream nodesToEdgesFile = std::ifstream(this->inputPrefix_.string() + "_nodes_to_edges.out");
     while (!nodesToEdgesFile.eof())
     {
       std::getline(nodesToEdgesFile, row);
