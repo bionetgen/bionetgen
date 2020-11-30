@@ -1,7 +1,7 @@
 #include "./voronoi.cpp"
 
-#include <boost/bind/bind.hpp>
-
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
+#include <boost/property_tree/json_parser.hpp>
 class ConfigLoader
 {
     boost::property_tree::ptree _root;

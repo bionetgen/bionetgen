@@ -10,7 +10,6 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
 
 #include "../voro++-0.4.6/src/voro++.hh"
 // #include "../lib/lib_vec.hpp"
