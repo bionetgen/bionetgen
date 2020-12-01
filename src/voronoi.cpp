@@ -23,29 +23,29 @@ class Voronoi
   uint mode_;
   boost::filesystem::path outputPrefix_;
   boost::filesystem::path inputPrefix_;
-  std::vector<double> boxsize_;
-  std::vector<double> boxZeroPoint_;
+  std::vector<double> boxSize_;
+  std::vector<double> boxOrigin_;
   double seed_;
   uint voronoiParticleCount_;
   uint currnumfils_;
   // position of center of particles
   std::vector<std::vector<double>> particlePositions_ = std::vector<std::vector<double>>();
   // contains vertex id with its position
-  std::vector<std::vector<double>> uniqueVertices_ = std::vector<std::vector<double>>();
+  std::vector<std::vector<double>> vertices_ = std::vector<std::vector<double>>();
   // contains edges and the respective nodes it is attached to
-  std::vector<std::vector<unsigned int>> uniqueVertexEdgePartners_ = std::vector<std::vector<unsigned int>>();
+  std::vector<std::vector<unsigned int>> edges_ = std::vector<std::vector<unsigned int>>();
   // contains order of a vertices
-  std::vector<unsigned int> uniqueVertexOrders_ = std::vector<unsigned int>();
+  std::vector<unsigned int> vertexEdgeCount_ = std::vector<unsigned int>();
   // nodes to edges (contains dead nodes)
   std::vector<std::vector<unsigned int>> node_to_edges_;
   // the following map does not contain dead nodes, i.e. nodes with z == 0
   // so in here only really existing nodes
-  std::map<unsigned int, std::vector<double>> uniqueVertices_map_;
+  std::map<unsigned int, std::vector<double>> vertices_map_;
   // all really existing nodes with their respective edges
-  std::map<unsigned int, std::vector<unsigned int>> uniqueVertices_to_Edge_map_;
+  std::map<unsigned int, std::vector<unsigned int>> edge_map_;
   // a vector containing all vertex ids of really existing verteces. Note
   // that index of vector is not equal to to node id
-  std::vector<unsigned int> uniqueVertices_for_random_draw_;
+  std::vector<unsigned int> vertices_for_random_draw_;
   // shifted vertex positions
   std::vector<std::vector<double>> vtxs_shifted_;
   // contains all finite element node ids that belong to vertex
@@ -83,9 +83,9 @@ public:
     this->simulate_ = config.get<bool>("simulate");
 
     for (auto child : config.get_child("box-size"))
-      this->boxsize_.push_back(child.second.get_value<double>());
+      this->boxSize_.push_back(child.second.get_value<double>());
     for (auto child : config.get_child("box-origin"))
-      this->boxZeroPoint_.push_back(child.second.get_value<double>());
+      this->boxOrigin_.push_back(child.second.get_value<double>());
 
     // Simulated Annealing
     auto config_sa = config.get_child("simulated-annealing");
@@ -106,7 +106,7 @@ public:
     this->temperature_inital = config_sa.get<double>("temperature-initial");
     this->decay_rate_temperature = config_sa.get<double>("temperature-decay-rate");
     const double max_movementFrac = config_sa.get<double>("max-movement-frac");
-    this->max_movement = max_movementFrac * this->boxsize_[0];
+    this->max_movement = max_movementFrac * this->boxSize_[0];
     this->screen_output_every = config_sa.get<uint>("screen-output-every");
 
     // for binning
@@ -144,9 +144,9 @@ public:
 
     // reset variables in case of unsuccessful computation
     this->particlePositions_.clear();
-    this->uniqueVertices_.clear();
-    this->uniqueVertexEdgePartners_.clear();
-    this->uniqueVertexOrders_.clear();
+    this->vertices_.clear();
+    this->edges_.clear();
+    this->vertexEdgeCount_.clear();
 
     double compareTolerance = 1e-13;
     std::string nullString = "";
@@ -158,12 +158,12 @@ public:
     double z_min;
     double z_max;
 
-    x_min = this->boxZeroPoint_[0] - this->boxsize_[0] / 2;
-    x_max = this->boxZeroPoint_[0] + this->boxsize_[0] / 2;
-    y_min = this->boxZeroPoint_[1] - this->boxsize_[1] / 2;
-    y_max = this->boxZeroPoint_[1] + this->boxsize_[1] / 2;
-    z_min = this->boxZeroPoint_[2] - this->boxsize_[2] / 2;
-    z_max = this->boxZeroPoint_[2] + this->boxsize_[2] / 2;
+    x_min = this->boxOrigin_[0] - this->boxSize_[0] / 2;
+    x_max = this->boxOrigin_[0] + this->boxSize_[0] / 2;
+    y_min = this->boxOrigin_[1] - this->boxSize_[1] / 2;
+    y_max = this->boxOrigin_[1] + this->boxSize_[1] / 2;
+    z_min = this->boxOrigin_[2] - this->boxSize_[2] / 2;
+    z_max = this->boxOrigin_[2] + this->boxSize_[2] / 2;
     int n_x = 1, n_y = 1, n_z = 1;
 
     unsigned int particleCount = this->voronoiParticleCount_;
@@ -234,25 +234,21 @@ public:
           double minRad = 0;
           double avgRad = 0;
 
-          std::vector<int> vertexOrders;
-          cell.vertex_orders(vertexOrders);
+          std::vector<int> vertexEdgeCount;
+          cell.vertex_orders(vertexEdgeCount);
 
-          std::vector<std::vector<int>> vertexPartners =
-              std::vector<std::vector<int>>(vertexCount);
-          std::vector<std::vector<uint32_t>> cellVertexEdgePartners =
-              std::vector<std::vector<uint32_t>>();
-          std::vector<std::vector<uint32_t>> uniqueVertexEdgePartners =
-              std::vector<std::vector<uint32_t>>();
+          std::vector<std::vector<int>> vertexPartners = std::vector<std::vector<int>>(vertexCount);
+          // std::vector<std::vector<uint32_t>> cellEdges = std::vector<std::vector<uint32_t>>();
 
-          unsigned int uniquePartner1PositionIndex;
-          unsigned int uniquePartner2PositionIndex;
+          unsigned int partner1Index;
+          unsigned int partner2Index;
 
           for (int vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex)
           {
             // edges
-            vertexPartners[vertexIndex] = std::vector<int>(vertexOrders[vertexIndex]);
+            vertexPartners[vertexIndex] = std::vector<int>(vertexEdgeCount[vertexIndex]);
 
-            for (int partnerIndex = 0; partnerIndex < vertexOrders[vertexIndex]; ++partnerIndex)
+            for (int partnerIndex = 0; partnerIndex < vertexEdgeCount[vertexIndex]; ++partnerIndex)
               vertexPartners[vertexIndex][partnerIndex] = cell.ed[vertexIndex][partnerIndex];
 
             // statistical
@@ -274,27 +270,27 @@ public:
             std::vector<double> vertexPositionCurrent = cellVertices[vertexIndex];
             bool vertexIsUnique = true;
 
-            for (int uniqueVertexIndex = 0; uniqueVertexIndex < this->uniqueVertices_.size(); ++uniqueVertexIndex)
+            for (int vertexIndex = 0; vertexIndex < this->vertices_.size(); ++vertexIndex)
             {
-              if (std::abs(this->uniqueVertices_[uniqueVertexIndex][0] - vertexPositionCurrent[0]) < compareTolerance &&
-                  std::abs(this->uniqueVertices_[uniqueVertexIndex][1] - vertexPositionCurrent[1]) < compareTolerance &&
-                  std::abs(this->uniqueVertices_[uniqueVertexIndex][2] - vertexPositionCurrent[2]) < compareTolerance)
+              if (std::abs(this->vertices_[vertexIndex][0] - vertexPositionCurrent[0]) < compareTolerance &&
+                  std::abs(this->vertices_[vertexIndex][1] - vertexPositionCurrent[1]) < compareTolerance &&
+                  std::abs(this->vertices_[vertexIndex][2] - vertexPositionCurrent[2]) < compareTolerance)
               {
                 vertexIsUnique = false;
-                uniquePartner1PositionIndex = uniqueVertexIndex;
+                partner1Index = vertexIndex;
                 // std::cout << "1: " <<
-                // std::to_string(uniquePartner1PositionIndex) << "\n";
+                // std::to_string(partner1Index) << "\n";
               }
             }
 
             if (vertexIsUnique)
             {
-              uniquePartner1PositionIndex = this->uniqueVertices_.size();
-              this->uniqueVertices_.push_back(vertexPositionCurrent);
+              partner1Index = this->vertices_.size();
+              this->vertices_.push_back(vertexPositionCurrent);
 
-              if (debug_lastUnique > 0 && uniquePartner1PositionIndex < debug_lastUnique)
+              if (debug_lastUnique > 0 && partner1Index < debug_lastUnique)
               {
-                std::cout << "1U: " << std::to_string(uniquePartner1PositionIndex)
+                std::cout << "1U: " << std::to_string(partner1Index)
                           << "\n";
                 std::cout << "^ ERROR! Unique vertex id is not higher than last! "
                              "Press any key to continue...\n";
@@ -304,39 +300,39 @@ public:
             }
 
             std::vector<bool> onPlanesPartner1 = std::vector<bool>{
-                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 0) || this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 0),
-                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 1) || this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 1),
-                this->VertexIsOnHighPlane(uniquePartner1PositionIndex, 2) || this->VertexIsOnLowPlane(uniquePartner1PositionIndex, 2)};
+                this->VertexIsOnHighPlane(partner1Index, 0) || this->VertexIsOnLowPlane(partner1Index, 0),
+                this->VertexIsOnHighPlane(partner1Index, 1) || this->VertexIsOnLowPlane(partner1Index, 1),
+                this->VertexIsOnHighPlane(partner1Index, 2) || this->VertexIsOnLowPlane(partner1Index, 2)};
 
             unsigned int edgesCreated = 0;
-            for (int partnerIndex = 0; partnerIndex < vertexOrders[vertexIndex]; ++partnerIndex)
+            for (int partnerIndex = 0; partnerIndex < vertexEdgeCount[vertexIndex]; ++partnerIndex)
             {
               int vertexPartnerIndexCurrent = vertexPartners[vertexIndex][partnerIndex];
               std::vector<double> vertexPartnerPositionCurrent = cellVertices[vertexPartnerIndexCurrent];
 
               bool vertexPartnerIsUnique = true;
-              for (int uniqueVertexIndex = 0; uniqueVertexIndex < this->uniqueVertices_.size(); ++uniqueVertexIndex)
+              for (int vertexIndex = 0; vertexIndex < this->vertices_.size(); ++vertexIndex)
               {
-                if (std::abs(this->uniqueVertices_[uniqueVertexIndex][0] - vertexPartnerPositionCurrent[0]) < compareTolerance &&
-                    std::abs(this->uniqueVertices_[uniqueVertexIndex][1] - vertexPartnerPositionCurrent[1]) < compareTolerance &&
-                    std::abs(this->uniqueVertices_[uniqueVertexIndex][2] - vertexPartnerPositionCurrent[2]) < compareTolerance)
+                if (std::abs(this->vertices_[vertexIndex][0] - vertexPartnerPositionCurrent[0]) < compareTolerance &&
+                    std::abs(this->vertices_[vertexIndex][1] - vertexPartnerPositionCurrent[1]) < compareTolerance &&
+                    std::abs(this->vertices_[vertexIndex][2] - vertexPartnerPositionCurrent[2]) < compareTolerance)
                 {
                   vertexPartnerIsUnique = false;
-                  uniquePartner2PositionIndex = uniqueVertexIndex;
+                  partner2Index = vertexIndex;
                   // std::cout << "2: " <<
-                  // std::to_string(uniquePartner2PositionIndex) << "\n";
+                  // std::to_string(partner2Index) << "\n";
                 }
               }
 
               if (vertexPartnerIsUnique)
               {
-                uniquePartner2PositionIndex = this->uniqueVertices_.size();
-                this->uniqueVertices_.push_back(vertexPartnerPositionCurrent);
+                partner2Index = this->vertices_.size();
+                this->vertices_.push_back(vertexPartnerPositionCurrent);
 
-                if (debug_lastUnique > 0 && uniquePartner2PositionIndex < debug_lastUnique)
+                if (debug_lastUnique > 0 && partner2Index < debug_lastUnique)
                 {
                   std::cout << "2U: "
-                            << std::to_string(uniquePartner2PositionIndex)
+                            << std::to_string(partner2Index)
                             << "\n";
                   std::cout << "^ ERROR! Unique vertex id is not higher than "
                                "last! Press any key to continue...\n";
@@ -345,18 +341,18 @@ public:
                 debug_lastUnique++;
               }
 
-              if (uniquePartner1PositionIndex == uniquePartner2PositionIndex)
+              if (partner1Index == partner2Index)
               {
                 std::cout << "Error: VertexUIds equal. This should not happen!\n";
                 continue;
               }
 
               bool edgeIsUnique = true;
-              for (int uniqueVertexEdgePartnersIndex = 0; uniqueVertexEdgePartnersIndex < this->uniqueVertexEdgePartners_.size(); ++uniqueVertexEdgePartnersIndex)
-                if ((this->uniqueVertexEdgePartners_[uniqueVertexEdgePartnersIndex][0] == uniquePartner1PositionIndex &&
-                     this->uniqueVertexEdgePartners_[uniqueVertexEdgePartnersIndex][1] == uniquePartner2PositionIndex) ||
-                    (this->uniqueVertexEdgePartners_[uniqueVertexEdgePartnersIndex][0] == uniquePartner2PositionIndex &&
-                     this->uniqueVertexEdgePartners_[uniqueVertexEdgePartnersIndex][1] == uniquePartner1PositionIndex))
+              for (int edgeIndex = 0; edgeIndex < this->edges_.size(); ++edgeIndex)
+                if ((this->edges_[edgeIndex][0] == partner1Index &&
+                     this->edges_[edgeIndex][1] == partner2Index) ||
+                    (this->edges_[edgeIndex][0] == partner2Index &&
+                     this->edges_[edgeIndex][1] == partner1Index))
                 {
                   edgeIsUnique = false;
                 }
@@ -365,9 +361,9 @@ public:
               {
                 //! OLD
                 std::vector<bool> onPlanesPartner2 = std::vector<bool>{
-                    this->VertexIsOnHighPlane(uniquePartner2PositionIndex, 0) || this->VertexIsOnLowPlane(uniquePartner2PositionIndex, 0),
-                    this->VertexIsOnHighPlane(uniquePartner2PositionIndex, 1) || this->VertexIsOnLowPlane(uniquePartner2PositionIndex, 1),
-                    this->VertexIsOnHighPlane(uniquePartner2PositionIndex, 2) || this->VertexIsOnLowPlane(uniquePartner2PositionIndex, 2)};
+                    this->VertexIsOnHighPlane(partner2Index, 0) || this->VertexIsOnLowPlane(partner2Index, 0),
+                    this->VertexIsOnHighPlane(partner2Index, 1) || this->VertexIsOnLowPlane(partner2Index, 1),
+                    this->VertexIsOnHighPlane(partner2Index, 2) || this->VertexIsOnLowPlane(partner2Index, 2)};
 
                 // 1 1 1 1
                 if ((!true && onPlanesPartner1[0] && onPlanesPartner2[0]) ||
@@ -379,25 +375,25 @@ public:
                   if (vertexPartnerIsUnique)
                   {
                     // remove 2
-                    this->uniqueVertices_.erase(this->uniqueVertices_.begin() + uniquePartner2PositionIndex);
+                    this->vertices_.erase(this->vertices_.begin() + partner2Index);
                     debug_lastUnique--;
 
                     // WARNING
-                    if (uniquePartner2PositionIndex < uniquePartner1PositionIndex)
-                      --uniquePartner1PositionIndex;
+                    if (partner2Index < partner1Index)
+                      --partner1Index;
                   }
                   continue;
                 }
                 else
                 {
-                  this->uniqueVertexEdgePartners_.push_back(std::vector<unsigned int>{uniquePartner1PositionIndex,
-                                                                                      uniquePartner2PositionIndex});
+                  this->edges_.push_back(std::vector<unsigned int>{partner1Index,
+                                                                   partner2Index});
                   ++edgesCreated;
                 }
               }
 
-              uniqueVertexEdgePartners.push_back(std::vector<unsigned int>{
-                  uniquePartner1PositionIndex, uniquePartner2PositionIndex});
+              // cellEdges.push_back(std::vector<unsigned int>{
+              //     partner1Index, partner2Index});
             }
 
             if (((!true && onPlanesPartner1[0]) ||
@@ -406,17 +402,17 @@ public:
                 vertexIsUnique && edgesCreated == 0) // no partner2 depends on partner1?
             {
               // remove 1
-              this->uniqueVertices_.erase(this->uniqueVertices_.begin() + uniquePartner1PositionIndex);
+              this->vertices_.erase(this->vertices_.begin() + partner1Index);
               --debug_lastUnique;
             }
           }
 
           // finalize statistical data for network characterization
-          // for (uint32_t vtxOrder : vertexOrders)
+          // for (uint32_t vtxOrder : vertexEdgeCount_)
           //   this->cellVertexOrders_[cellIndex].push_back(vtxOrder);
           // double cellRad_in = 0;
           // size_t proj_num = 0;
-          // for (std::vector<uint32_t> edge : uniqueVertexEdgePartners)
+          // for (std::vector<uint32_t> edge : edges)
           // {
           //   vec3 vtxP1_pos(this->uniqueVertices_[edge[0]]);
           //   vec3 vtxP2_pos(this->uniqueVertices_[edge[1]]);
@@ -484,14 +480,14 @@ public:
     std::cout << "\n   Computation of Voronoi is done now. It took " << elapsed_voro.count() / 60 << " minutes. \n";
 
     // remove double edges in periodic BC dimension
-    std::cout << "\n2) Removing double edges. Current edge count: " << this->uniqueVertexEdgePartners_.size() << "\n";
+    std::cout << "\n2) Removing double edges. Current edge count: " << this->edges_.size() << "\n";
     auto start_removing_doubles = std::chrono::high_resolution_clock::now();
     // now clean up
-    node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
-    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    node_to_edges_ = std::vector<std::vector<unsigned int>>(vertices_.size(), std::vector<unsigned int>());
+    for (unsigned int i_edge = 0; i_edge < edges_.size(); ++i_edge)
     {
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][0]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][1]].push_back(i_edge);
     }
 
     //! Careful: creates dead nodes! (vertices still exist!)
@@ -507,15 +503,15 @@ public:
     auto start_cleaning = std::chrono::high_resolution_clock::now();
 
     // now clean up
-    node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
-    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    node_to_edges_ = std::vector<std::vector<unsigned int>>(vertices_.size(), std::vector<unsigned int>());
+    for (unsigned int i_edge = 0; i_edge < edges_.size(); ++i_edge)
     {
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][0]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][1]].push_back(i_edge);
     }
 
-    uniqueVertices_map_.clear();
-    this->vtxs_shifted_ = this->uniqueVertices_;
+    vertices_map_.clear();
+    this->vtxs_shifted_ = this->vertices_;
     this->ShiftVertices(this->vtxs_shifted_);
 
     std::vector<unsigned int> vertices_with_order_1;
@@ -523,7 +519,7 @@ public:
     for (unsigned int i_node = 0; i_node < node_to_edges_.size(); ++i_node)
     {
       // if (node_to_edges_[i_node].size() == 4)
-      //   uniqueVertices_map_[i_node] = vtxs_shifted_[i_node];
+      //   vertices_map_[i_node] = vtxs_shifted_[i_node];
 
       if (node_to_edges_[i_node].size() == 1)
         vertices_with_order_1.push_back(i_node);
@@ -540,61 +536,61 @@ public:
         if (VerticesMatch(vtxs_shifted_[vertices_with_order_3[i]],
                           vtxs_shifted_[vertices_with_order_1[j]]))
         {
-          if (uniqueVertexEdgePartners_[node_to_edges_[vertices_with_order_1[j]][0]][0] == vertices_with_order_1[j])
-            uniqueVertexEdgePartners_[node_to_edges_[vertices_with_order_1[j]][0]][0] = vertices_with_order_3[i];
+          if (edges_[node_to_edges_[vertices_with_order_1[j]][0]][0] == vertices_with_order_1[j])
+            edges_[node_to_edges_[vertices_with_order_1[j]][0]][0] = vertices_with_order_3[i];
           else
-            uniqueVertexEdgePartners_[node_to_edges_[vertices_with_order_1[j]][0]][1] = vertices_with_order_3[i];
+            edges_[node_to_edges_[vertices_with_order_1[j]][0]][1] = vertices_with_order_3[i];
 
-          // uniqueVertices_map_[vertices_with_order_3[i]] = vtxs_shifted_[vertices_with_order_3[i]];
+          // vertices_map_[vertices_with_order_3[i]] = vtxs_shifted_[vertices_with_order_3[i]];
         }
       }
     }
 
     //! remove 'dead' vertices
-    std::vector<bool> removeVertices = std::vector<bool>(uniqueVertices_.size(), true);
+    std::vector<bool> removeVertices = std::vector<bool>(vertices_.size(), true);
     auto edgeId = 0;
-    for (auto &edge : this->uniqueVertexEdgePartners_)
+    for (auto &edge : this->edges_)
     {
       removeVertices[edge[0]] = false;
       removeVertices[edge[1]] = false;
     }
 
     auto finalSize = std::count_if(removeVertices.begin(), removeVertices.end(), [](bool remove) { return !remove; });
-    std::vector<uint> newVertexIds = std::vector<uint>(uniqueVertices_.size());
+    std::vector<uint> newVertexIds = std::vector<uint>(vertices_.size());
     auto newVertices = std::vector<std::vector<double>>(finalSize);
     auto newVertexId = 0;
-    for (uint vertexId = 0; vertexId < uniqueVertices_.size(); vertexId++)
+    for (uint vertexId = 0; vertexId < vertices_.size(); vertexId++)
     {
       if (!removeVertices[vertexId])
       {
         newVertexIds[vertexId] = newVertexId;
-        newVertices[newVertexId] = uniqueVertices_[vertexId];
-        uniqueVertices_map_[newVertexId] = vtxs_shifted_[vertexId];
+        newVertices[newVertexId] = vertices_[vertexId];
+        vertices_map_[newVertexId] = vtxs_shifted_[vertexId];
         newVertexId++;
       }
     }
-    uniqueVertices_ = newVertices;
+    vertices_ = newVertices;
 
-    for (auto &edge : this->uniqueVertexEdgePartners_)
+    for (auto &edge : this->edges_)
     {
       edge[0] = newVertexIds[edge[0]];
       edge[1] = newVertexIds[edge[1]];
     }
 
-    node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
-    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    node_to_edges_ = std::vector<std::vector<unsigned int>>(vertices_.size(), std::vector<unsigned int>());
+    for (unsigned int i_edge = 0; i_edge < edges_.size(); ++i_edge)
     {
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][0]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][1]].push_back(i_edge);
     }
 
     auto stop_cleaning = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapses_cleaning = stop_cleaning - start_cleaning;
     std::cout << "   Cleaning is done now. It took " << elapses_cleaning.count() / 60 << " minutes. \n";
 
-    std::cout << "   Number of lines: " << this->uniqueVertexEdgePartners_.size() << "\n"
+    std::cout << "   Number of lines: " << this->edges_.size() << "\n"
               << std::flush;
-    std::cout << "   Number of nodes: " << this->uniqueVertices_for_random_draw_.size() << "\n"
+    std::cout << "   Number of nodes: " << this->vertices_for_random_draw_.size() << "\n"
               << std::flush;
 
     bool adapt_connectivity = true;
@@ -602,10 +598,10 @@ public:
       this->AdaptConnectivity(gen, dis_uni);
 
     // Compute Vertex order
-    this->uniqueVertexOrders_.clear();
+    this->vertexEdgeCount_.clear();
     for (unsigned int i_node = 0; i_node < node_to_edges_.size(); ++i_node)
     {
-      this->uniqueVertexOrders_.push_back(node_to_edges_[i_node].size());
+      this->vertexEdgeCount_.push_back(node_to_edges_[i_node].size());
     }
     // std::cout << "   Average vertex order is " << CalcAvgVtxOrder() << std::endl;
 
@@ -640,9 +636,9 @@ public:
     // this->networkCellRadStdDevNorm_ = this->networkCellRadStdDev_ / this->networkCellRadAvg_;
 
     // allocate memory for dnodes (finite element nodes of actual discretization)
-    this->vertexNodeIds_ = std::vector<std::vector<unsigned int>>(this->uniqueVertices_.size());
+    this->vertexNodeIds_ = std::vector<std::vector<unsigned int>>(this->vertices_.size());
 
-    int numberOfFilaments = this->uniqueVertexEdgePartners_.size();
+    int numberOfFilaments = this->edges_.size();
     this->currnumfils_ = numberOfFilaments;
   }
 
@@ -654,9 +650,9 @@ public:
 
   double GetEdgeLength(unsigned int edgeUId) const
   {
-    std::vector<unsigned int> partners = this->uniqueVertexEdgePartners_[edgeUId];
-    std::vector<double> partner1Position = this->uniqueVertices_[partners[0]];
-    std::vector<double> partner2Position = this->uniqueVertices_[partners[1]];
+    std::vector<unsigned int> partners = this->edges_[edgeUId];
+    std::vector<double> partner1Position = this->vertices_[partners[0]];
+    std::vector<double> partner2Position = this->vertices_[partners[1]];
 
     UnShift3D(partner1Position, partner2Position);
 
@@ -673,7 +669,7 @@ public:
       unsigned int vertexUId,
       unsigned int dimension) const
   {
-    return this->PointIsOnHighPlane(this->uniqueVertices_[vertexUId],
+    return this->PointIsOnHighPlane(this->vertices_[vertexUId],
                                     dimension);
   }
 
@@ -681,7 +677,7 @@ public:
       unsigned int vertexUId,
       unsigned int dimension) const
   {
-    return this->PointIsOnLowPlane(this->uniqueVertices_[vertexUId],
+    return this->PointIsOnLowPlane(this->vertices_[vertexUId],
                                    dimension);
   }
 
@@ -689,8 +685,8 @@ public:
       std::vector<double> const &point,
       unsigned int dimension) const
   {
-    return (this->boxZeroPoint_[dimension] +
-            this->boxsize_[dimension] / 2) <= point[dimension];
+    return (this->boxOrigin_[dimension] +
+            this->boxSize_[dimension] / 2) <= point[dimension];
   }
 
   bool PointIsOverLowPlane(
@@ -698,8 +694,8 @@ public:
       std::vector<double> const &point,
       unsigned int dimension) const
   {
-    return (this->boxZeroPoint_[dimension] -
-            this->boxsize_[dimension] / 2) >= point[dimension];
+    return (this->boxOrigin_[dimension] -
+            this->boxSize_[dimension] / 2) >= point[dimension];
   }
 
   bool PointIsOnHighPlane(
@@ -707,8 +703,8 @@ public:
       unsigned int dimension) const
   {
     double compareTolerance = 1e-13;
-    return std::abs(this->boxZeroPoint_[dimension] +
-                    this->boxsize_[dimension] / 2 - point[dimension]) <
+    return std::abs(this->boxOrigin_[dimension] +
+                    this->boxSize_[dimension] / 2 - point[dimension]) <
            compareTolerance;
   }
 
@@ -717,8 +713,8 @@ public:
       unsigned int dimension) const
   {
     double compareTolerance = 1e-13;
-    return std::abs(this->boxZeroPoint_[dimension] -
-                    this->boxsize_[dimension] / 2 - point[dimension]) <
+    return std::abs(this->boxOrigin_[dimension] -
+                    this->boxSize_[dimension] / 2 - point[dimension]) <
            compareTolerance;
   }
 
@@ -752,14 +748,14 @@ public:
 
         if (this->PointIsOverHighPlane(vertices[i], dim))
         {
-          this->ShiftPointDown(vertices[i], this->boxsize_, dim);
+          this->ShiftPointDown(vertices[i], this->boxSize_, dim);
           for (unsigned int k = 0; k < node_to_edges_[i].size(); ++k)
             shifted_lines.push_back(node_to_edges_[i][k]);
         }
 
         else if (this->PointIsOverLowPlane(vertices[i], dim))
         {
-          this->ShiftPointUp(vertices[i], this->boxsize_, dim);
+          this->ShiftPointUp(vertices[i], this->boxSize_, dim);
 
           for (unsigned int k = 0; k < node_to_edges_[i].size(); ++k)
             shifted_lines.push_back(node_to_edges_[i][k]);
@@ -793,15 +789,15 @@ public:
 
     double x = d + X;
 
-    if (x - ref < -0.5 * boxsize_[dim])
+    if (x - ref < -0.5 * boxSize_[dim])
     {
       unshifted = true;
-      d += boxsize_[dim];
+      d += boxSize_[dim];
     }
-    else if (x - ref > 0.5 * boxsize_[dim])
+    else if (x - ref > 0.5 * boxSize_[dim])
     {
       unshifted = true;
-      d -= boxsize_[dim];
+      d -= boxSize_[dim];
     }
 
     return unshifted;
@@ -886,36 +882,36 @@ public:
     node_cosine_to_bin[i_node].clear();
 
     // loop over all edges of the respective node
-    for (unsigned int i = 0; i < uniqueVertices_to_Edge_map_[i_node].size(); ++i)
+    for (unsigned int i = 0; i < edge_map_[i_node].size(); ++i)
     {
       // edge 1
-      unsigned int edge_1 = uniqueVertices_to_Edge_map_[i_node][i];
+      unsigned int edge_1 = edge_map_[i_node][i];
 
       // get direction vector
       for (unsigned int idim = 0; idim < 3; ++idim)
       {
-        if (this->uniqueVertexEdgePartners_[edge_1][0] == i_node)
-          get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_1][1]],
-                                uniqueVertices_[uniqueVertexEdgePartners_[edge_1][0]], dir_vec_1);
+        if (this->edges_[edge_1][0] == i_node)
+          get_unshifted_dir_vec(vertices_[edges_[edge_1][1]],
+                                vertices_[edges_[edge_1][0]], dir_vec_1);
         else
-          get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_1][0]],
-                                uniqueVertices_[uniqueVertexEdgePartners_[edge_1][1]], dir_vec_1);
+          get_unshifted_dir_vec(vertices_[edges_[edge_1][0]],
+                                vertices_[edges_[edge_1][1]], dir_vec_1);
       }
 
-      for (unsigned int j = i + 1; j < uniqueVertices_to_Edge_map_[i_node].size(); ++j)
+      for (unsigned int j = i + 1; j < edge_map_[i_node].size(); ++j)
       {
         // edge 2
-        unsigned int edge_2 = uniqueVertices_to_Edge_map_[i_node][j];
+        unsigned int edge_2 = edge_map_[i_node][j];
 
         // get direction vector
         for (unsigned int idim = 0; idim < 3; ++idim)
         {
-          if (this->uniqueVertexEdgePartners_[edge_2][0] == i_node)
-            get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_2][1]],
-                                  uniqueVertices_[uniqueVertexEdgePartners_[edge_2][0]], dir_vec_2);
+          if (this->edges_[edge_2][0] == i_node)
+            get_unshifted_dir_vec(vertices_[edges_[edge_2][1]],
+                                  vertices_[edges_[edge_2][0]], dir_vec_2);
           else
-            get_unshifted_dir_vec(uniqueVertices_[uniqueVertexEdgePartners_[edge_2][0]],
-                                  uniqueVertices_[uniqueVertexEdgePartners_[edge_2][1]], dir_vec_2);
+            get_unshifted_dir_vec(vertices_[edges_[edge_2][0]],
+                                  vertices_[edges_[edge_2][1]], dir_vec_2);
         }
 
         // compute cosine
@@ -945,11 +941,11 @@ public:
     if (edge_length_to_bin[i_edge] > -0.1)
       --length_distribution[edge_length_to_bin[i_edge]];
 
-    unsigned int node_1 = this->uniqueVertexEdgePartners_[i_edge][0];
-    unsigned int node_2 = this->uniqueVertexEdgePartners_[i_edge][1];
+    unsigned int node_1 = this->edges_[i_edge][0];
+    unsigned int node_2 = this->edges_[i_edge][1];
 
-    double curr_new_length = l2_norm_dist_two_points(this->uniqueVertices_[node_1],
-                                                     this->uniqueVertices_[node_2]) *
+    double curr_new_length = l2_norm_dist_two_points(this->vertices_[node_1],
+                                                     this->vertices_[node_2]) *
                              length_norm_fac;
 
     unsigned int curr_bin = std::floor(curr_new_length / interval_size_lengths);
@@ -994,7 +990,7 @@ public:
   {
     for (auto const &i_node : nodes_to_revert)
     {
-      this->uniqueVertices_[i_node] = nodes_backup[i_node];
+      this->vertices_[i_node] = nodes_backup[i_node];
     }
   }
 
@@ -1006,7 +1002,7 @@ public:
   {
     for (auto const &i_node : nodes_to_revert)
     {
-      nodes_backup[i_node] = this->uniqueVertices_[i_node];
+      nodes_backup[i_node] = this->vertices_[i_node];
     }
   }
 
@@ -1018,7 +1014,7 @@ public:
   {
     for (auto const &i_edge : edges_to_revert)
     {
-      uniqueVertexEdgePartners_[i_edge] = uniqueVertexEdgePartners_backup[i_edge];
+      edges_[i_edge] = uniqueVertexEdgePartners_backup[i_edge];
     }
   }
 
@@ -1030,7 +1026,7 @@ public:
   {
     for (auto const &i_edge : edges_to_revert)
     {
-      uniqueVertexEdgePartners_backup[i_edge] = uniqueVertexEdgePartners_[i_edge];
+      uniqueVertexEdgePartners_backup[i_edge] = edges_[i_edge];
     }
   }
 
@@ -1136,7 +1132,7 @@ public:
   void RemoveDoubles()
   {
     auto start_remove = std::chrono::high_resolution_clock::now();
-    std::vector<std::vector<double>> vtxs_shifted = this->uniqueVertices_;
+    std::vector<std::vector<double>> vtxs_shifted = this->vertices_;
 
     std::vector<unsigned int> shifted_lines = this->ShiftVertices(vtxs_shifted);
 
@@ -1150,32 +1146,32 @@ public:
     unsigned int count = 1;
     for (unsigned int i = 0; i < shifted_lines.size(); ++i)
     {
-      if ((uniqueVertexEdgePartners_[shifted_lines[i]][0] == INT32_MAX) || (uniqueVertexEdgePartners_[shifted_lines[i]][1] == INT32_MAX))
+      if ((edges_[shifted_lines[i]][0] == INT32_MAX) || (edges_[shifted_lines[i]][1] == INT32_MAX))
       {
         continue;
       }
 
-      for (unsigned int j = 0; j < uniqueVertexEdgePartners_.size(); ++j)
+      for (unsigned int j = 0; j < edges_.size(); ++j)
       {
         if (shifted_lines[i] == j or
-            (uniqueVertexEdgePartners_[j][0] == INT32_MAX) or (uniqueVertexEdgePartners_[j][1] == INT32_MAX))
+            (edges_[j][0] == INT32_MAX) or (edges_[j][1] == INT32_MAX))
         {
           continue;
         }
-        if ((uniqueVertexEdgePartners_[shifted_lines[i]][0] == INT32_MAX) || (uniqueVertexEdgePartners_[shifted_lines[i]][1] == INT32_MAX))
+        if ((edges_[shifted_lines[i]][0] == INT32_MAX) || (edges_[shifted_lines[i]][1] == INT32_MAX))
         {
           continue;
         }
 
-        std::vector<double> edge1vtx1 = vtxs_shifted[uniqueVertexEdgePartners_[shifted_lines[i]][0]];
-        std::vector<double> edge1vtx2 = vtxs_shifted[uniqueVertexEdgePartners_[shifted_lines[i]][1]];
-        std::vector<double> edge2vtx1 = vtxs_shifted[uniqueVertexEdgePartners_[j][0]];
-        std::vector<double> edge2vtx2 = vtxs_shifted[uniqueVertexEdgePartners_[j][1]];
+        std::vector<double> edge1vtx1 = vtxs_shifted[edges_[shifted_lines[i]][0]];
+        std::vector<double> edge1vtx2 = vtxs_shifted[edges_[shifted_lines[i]][1]];
+        std::vector<double> edge2vtx1 = vtxs_shifted[edges_[j][0]];
+        std::vector<double> edge2vtx2 = vtxs_shifted[edges_[j][1]];
 
         if ((this->VerticesMatch(edge1vtx1, edge2vtx1) && this->VerticesMatch(edge1vtx2, edge2vtx2)) ||
             (this->VerticesMatch(edge1vtx1, edge2vtx2) && this->VerticesMatch(edge1vtx2, edge2vtx1)))
         {
-          uniqueVertexEdgePartners_[shifted_lines[i] > j ? shifted_lines[i] : j] = std::vector<unsigned int>{INT32_MAX, INT32_MAX};
+          edges_[shifted_lines[i] > j ? shifted_lines[i] : j] = std::vector<unsigned int>{INT32_MAX, INT32_MAX};
         }
       }
 
@@ -1240,11 +1236,11 @@ public:
     // }
     std::cout << std::endl;
 
-    this->uniqueVertexEdgePartners_.erase(
-        std::remove(this->uniqueVertexEdgePartners_.begin(),
-                    this->uniqueVertexEdgePartners_.end(),
+    this->edges_.erase(
+        std::remove(this->edges_.begin(),
+                    this->edges_.end(),
                     std::vector<unsigned int>{INT32_MAX, INT32_MAX}),
-        this->uniqueVertexEdgePartners_.end());
+        this->edges_.end());
   }
 
   void AdaptConnectivity(std::mt19937 &gen, std::uniform_real_distribution<> &dis_uni)
@@ -1253,13 +1249,13 @@ public:
     std::cout << "\n4) Adapting valency distribution " << std::endl;
     auto start_valency = std::chrono::high_resolution_clock::now();
 
-    unsigned int num_nodes = this->uniqueVertices_map_.size();
-    unsigned int num_lines = this->uniqueVertexEdgePartners_.size();
+    unsigned int num_nodes = this->vertices_map_.size();
+    unsigned int num_lines = this->edges_.size();
 
     // put all vertex ids in vector to ease random draw of vertex
-    uniqueVertices_for_random_draw_.reserve(uniqueVertices_map_.size());
-    for (auto const &iter : uniqueVertices_map_)
-      uniqueVertices_for_random_draw_.push_back(iter.first);
+    vertices_for_random_draw_.reserve(vertices_map_.size());
+    for (auto const &iter : vertices_map_)
+      vertices_for_random_draw_.push_back(iter.first);
 
     // Adapt valency distribution to collagen network according to Nan2018
     // "Realizations of highly heterogeneous collagen networks via stochastic reconstruction
@@ -1276,14 +1272,14 @@ public:
     num_z_4 += num_nodes - (num_z_3 + num_z_4 + num_z_5 + num_z_6);
 
     // first take care of z = 6 (starting from all being z = 4)
-    std::uniform_int_distribution<> rand_node(0, uniqueVertices_for_random_draw_.size() - 1);
+    std::uniform_int_distribution<> rand_node(0, vertices_for_random_draw_.size() - 1);
 
     unsigned int num_curr_z_6 = 0;
     unsigned int num_curr_z_5 = 0;
 
     while (num_curr_z_6 < num_z_6)
     {
-      unsigned int node_1 = uniqueVertices_for_random_draw_[rand_node(gen)];
+      unsigned int node_1 = vertices_for_random_draw_[rand_node(gen)];
 
       if (node_to_edges_[node_1].size() == 4)
       {
@@ -1294,17 +1290,17 @@ public:
           unsigned int node_2 = 0;
           while (not success)
           {
-            node_2 = uniqueVertices_for_random_draw_[rand_node(gen)];
+            node_2 = vertices_for_random_draw_[rand_node(gen)];
             if (node_2 == node_1 or node_to_edges_[node_2].size() != 4)
               continue;
 
             // check distance
             for (unsigned int dim = 0; dim < 3; ++dim)
-              dir_1[dim] = uniqueVertices_map_[node_1][dim] - uniqueVertices_map_[node_2][dim];
+              dir_1[dim] = vertices_map_[node_1][dim] - vertices_map_[node_2][dim];
 
             UnShift3D(dir_1, dir_2);
 
-            if (l2_norm(dir_1) < one_third * this->boxsize_[0])
+            if (l2_norm(dir_1) < one_third * this->boxSize_[0])
             {
               success = true;
               break;
@@ -1315,9 +1311,9 @@ public:
           std::vector<unsigned int> new_line(2, 0);
           new_line[0] = node_1;
           new_line[1] = node_2;
-          node_to_edges_[node_1].push_back(uniqueVertexEdgePartners_.size());
-          node_to_edges_[node_2].push_back(uniqueVertexEdgePartners_.size());
-          uniqueVertexEdgePartners_.push_back(new_line);
+          node_to_edges_[node_1].push_back(edges_.size());
+          node_to_edges_[node_2].push_back(edges_.size());
+          edges_.push_back(new_line);
           ++num_curr_z_5;
         }
         ++num_curr_z_6;
@@ -1327,7 +1323,7 @@ public:
     // now take care of z = 5
     while (num_curr_z_5 < num_z_5)
     {
-      unsigned int node_1 = uniqueVertices_for_random_draw_[rand_node(gen)];
+      unsigned int node_1 = vertices_for_random_draw_[rand_node(gen)];
 
       bool success = false;
       if (node_to_edges_[node_1].size() == 4)
@@ -1335,17 +1331,17 @@ public:
         unsigned int node_2 = 0;
         while (not success)
         {
-          node_2 = uniqueVertices_for_random_draw_[rand_node(gen)];
+          node_2 = vertices_for_random_draw_[rand_node(gen)];
           if (node_2 == node_1 or node_to_edges_[node_2].size() != 4)
             continue;
 
           // check distance
           for (unsigned int dim = 0; dim < 3; ++dim)
-            dir_1[dim] = uniqueVertices_map_[node_1][dim] - uniqueVertices_map_[node_2][dim];
+            dir_1[dim] = vertices_map_[node_1][dim] - vertices_map_[node_2][dim];
 
           UnShift3D(dir_1, dir_2);
 
-          if (l2_norm(dir_1) < one_third * this->boxsize_[0])
+          if (l2_norm(dir_1) < one_third * this->boxSize_[0])
           {
             success = true;
             break;
@@ -1356,9 +1352,9 @@ public:
         std::vector<unsigned int> new_line(2, 0);
         new_line[0] = node_1;
         new_line[1] = node_2;
-        node_to_edges_[node_1].push_back(uniqueVertexEdgePartners_.size());
-        node_to_edges_[node_2].push_back(uniqueVertexEdgePartners_.size());
-        uniqueVertexEdgePartners_.push_back(new_line);
+        node_to_edges_[node_1].push_back(edges_.size());
+        node_to_edges_[node_2].push_back(edges_.size());
+        edges_.push_back(new_line);
         num_curr_z_5 += 2;
       }
     }
@@ -1366,13 +1362,13 @@ public:
     // now do with z = 3
     unsigned int num_found = 0;
     unsigned int max_try = 100;
-    std::vector<int> random_order = Permutation(uniqueVertices_for_random_draw_.size(), gen, dis_uni);
+    std::vector<int> random_order = Permutation(vertices_for_random_draw_.size(), gen, dis_uni);
     // do twice for better results
     for (int s = 0; s < 2; ++s)
     {
       for (unsigned int rand_node_i = 0; rand_node_i < random_order.size(); ++rand_node_i)
       {
-        int i_node = uniqueVertices_for_random_draw_[random_order[rand_node_i]];
+        int i_node = vertices_for_random_draw_[random_order[rand_node_i]];
 
         if (node_to_edges_[i_node].size() == 4)
         {
@@ -1382,10 +1378,10 @@ public:
           unsigned int second_affected_node = -1;
           do
           {
-            if (uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][0] == i_node)
-              second_affected_node = uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][1];
+            if (edges_[node_to_edges_[i_node][random_line]][0] == i_node)
+              second_affected_node = edges_[node_to_edges_[i_node][random_line]][1];
             else
-              second_affected_node = uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]][0];
+              second_affected_node = edges_[node_to_edges_[i_node][random_line]][0];
 
             if (node_to_edges_[second_affected_node].size() == 4)
             {
@@ -1401,7 +1397,7 @@ public:
             continue;
 
           //! don't erase yet! this destroys the order in edgeIds_valid!
-          this->uniqueVertexEdgePartners_[node_to_edges_[i_node][random_line]] =
+          this->edges_[node_to_edges_[i_node][random_line]] =
               std::vector<unsigned int>{INT32_MAX, INT32_MAX};
 
           int index = std::distance(node_to_edges_[second_affected_node].begin(), std::find(node_to_edges_[second_affected_node].begin(),
@@ -1420,19 +1416,19 @@ public:
     }
     // now really remove edges
     // erase now
-    this->uniqueVertexEdgePartners_.erase(std::remove(this->uniqueVertexEdgePartners_.begin(),
-                                                      this->uniqueVertexEdgePartners_.end(),
-                                                      std::vector<unsigned int>{INT32_MAX, INT32_MAX}),
-                                          this->uniqueVertexEdgePartners_.end());
-    num_lines = uniqueVertexEdgePartners_.size();
+    this->edges_.erase(std::remove(this->edges_.begin(),
+                                   this->edges_.end(),
+                                   std::vector<unsigned int>{INT32_MAX, INT32_MAX}),
+                       this->edges_.end());
+    num_lines = edges_.size();
 
     // recompute node to edges after adaption of connectivity
     node_to_edges_.clear();
-    node_to_edges_ = std::vector<std::vector<unsigned int>>(uniqueVertices_.size(), std::vector<unsigned int>());
-    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    node_to_edges_ = std::vector<std::vector<unsigned int>>(vertices_.size(), std::vector<unsigned int>());
+    for (unsigned int i_edge = 0; i_edge < edges_.size(); ++i_edge)
     {
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-      node_to_edges_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][0]].push_back(i_edge);
+      node_to_edges_[this->edges_[i_edge][1]].push_back(i_edge);
     }
 
     auto stop_valency = std::chrono::high_resolution_clock::now();
@@ -1444,9 +1440,9 @@ public:
   {
 
     // put all vertex ids in vector to ease random draw of vertex
-    uniqueVertices_for_random_draw_.reserve(uniqueVertices_map_.size());
-    for (auto const &iter : uniqueVertices_map_)
-      uniqueVertices_for_random_draw_.push_back(iter.first);
+    vertices_for_random_draw_.reserve(vertices_map_.size());
+    for (auto const &iter : vertices_map_)
+      vertices_for_random_draw_.push_back(iter.first);
 
     //*************************************************************************************
     // DO SIMULATED ANNEALING
@@ -1459,8 +1455,8 @@ public:
     // time measurement start
     auto start = std::chrono::high_resolution_clock::now();
 
-    unsigned int num_nodes = uniqueVertices_map_.size();
-    unsigned int num_lines = uniqueVertexEdgePartners_.size();
+    unsigned int num_nodes = vertices_map_.size();
+    unsigned int num_lines = edges_.size();
 
     // ... some more
     // to select interchange movement
@@ -1474,8 +1470,8 @@ public:
 
     // ... and even more
     std::vector<double> rand_new_node_pos(3, 0.0);
-    std::vector<std::vector<double>> uniqueVertices_backup(this->uniqueVertices_);
-    std::vector<std::vector<unsigned int>> uniqueVertexEdgePartners_backup(this->uniqueVertexEdgePartners_);
+    std::vector<std::vector<double>> uniqueVertices_backup(this->vertices_);
+    std::vector<std::vector<unsigned int>> uniqueVertexEdgePartners_backup(this->edges_);
     unsigned int random_line_1 = 0;
     unsigned int random_line_2 = 0;
     unsigned int iter = 0;
@@ -1486,7 +1482,7 @@ public:
     double temperature = temperature_inital;
     double delta_energy = 0.0;
     // normalize lengths according to Lindström
-    double length_norm_fac = 1.0 / std::pow((num_nodes / (this->boxsize_[0] * this->boxsize_[1] * this->boxsize_[2])), -1.0 / 3.0);
+    double length_norm_fac = 1.0 / std::pow((num_nodes / (this->boxSize_[0] * this->boxSize_[1] * this->boxSize_[2])), -1.0 / 3.0);
 
     // for binning
     std::vector<unsigned int> m_j_lengths;
@@ -1494,19 +1490,19 @@ public:
     double interval_size_lengths = 5.0 / p_num_bins_lengths;
     double interval_size_cosines = 2.0 / p_num_bins_cosines;
 
-    // build uniqueVertices_to_Edge_map_
-    for (unsigned int i_edge = 0; i_edge < uniqueVertexEdgePartners_.size(); ++i_edge)
+    // build edge_map_
+    for (unsigned int i_edge = 0; i_edge < edges_.size(); ++i_edge)
     {
-      uniqueVertices_to_Edge_map_[this->uniqueVertexEdgePartners_[i_edge][0]].push_back(i_edge);
-      uniqueVertices_to_Edge_map_[this->uniqueVertexEdgePartners_[i_edge][1]].push_back(i_edge);
+      edge_map_[this->edges_[i_edge][0]].push_back(i_edge);
+      edge_map_[this->edges_[i_edge][1]].push_back(i_edge);
     }
 
     // compute cosine distribution
     std::vector<double> cosine_distribution(p_num_bins_cosines, 0.0);
-    std::vector<std::vector<double>> node_cosine_to_bin(uniqueVertices_.size(), std::vector<double>());
+    std::vector<std::vector<double>> node_cosine_to_bin(vertices_.size(), std::vector<double>());
     std::vector<double> dir_vec_1(3, 0.0);
     std::vector<double> dir_vec_2(3, 0.0);
-    for (auto const &i_node : uniqueVertices_to_Edge_map_)
+    for (auto const &i_node : edge_map_)
     {
       ComputeCosineDistributionOfNode(i_node.first, dir_vec_1, dir_vec_2,
                                       interval_size_cosines, node_cosine_to_bin, cosine_distribution);
@@ -1519,7 +1515,7 @@ public:
 
     // compute length distribution
     std::vector<double> length_distribution(p_num_bins_lengths, 0.0);
-    std::vector<double> edge_length_to_bin(uniqueVertexEdgePartners_.size(), -1.0);
+    std::vector<double> edge_length_to_bin(edges_.size(), -1.0);
     for (unsigned int i_edge = 0; i_edge < num_lines; ++i_edge)
     {
       UpdateLengthDistributionOfLine(i_edge, length_norm_fac, dir_vec_1,
@@ -1535,7 +1531,7 @@ public:
     // output initial filament lengths
     std::ofstream filLen_file_initial(this->outputPrefix_.string() + "_fil_lengths_initial.txt");
     filLen_file_initial << "fil_lengths\n";
-    for (unsigned int filId = 0; filId < this->uniqueVertexEdgePartners_.size(); ++filId)
+    for (unsigned int filId = 0; filId < this->edges_.size(); ++filId)
       filLen_file_initial << this->GetFilamentLength(filId) * length_norm_fac << "\n";
 
     // print final cosine distribution
@@ -1568,12 +1564,12 @@ public:
           ++subiter;
           success = true;
           // select a random node
-          unsigned int rand_node_id = uniqueVertices_for_random_draw_[dis_node(gen)];
+          unsigned int rand_node_id = vertices_for_random_draw_[dis_node(gen)];
 
           // update position of this vertex
           for (unsigned int idim = 0; idim < 3; ++idim)
           {
-            this->uniqueVertices_[rand_node_id][idim] += dis_node_move(gen) * max_movement;
+            this->vertices_[rand_node_id][idim] += dis_node_move(gen) * max_movement;
           }
 
           // recompute length and cosine distribution of affected nodes
@@ -1581,13 +1577,13 @@ public:
           std::set<unsigned int> affected_lines;
           for (auto const &iter_edges : node_to_edges_[rand_node_id])
           {
-            affected_nodes.insert(this->uniqueVertexEdgePartners_[iter_edges][0]);
-            affected_nodes.insert(this->uniqueVertexEdgePartners_[iter_edges][1]);
+            affected_nodes.insert(this->edges_[iter_edges][0]);
+            affected_nodes.insert(this->edges_[iter_edges][1]);
             affected_lines.insert(iter_edges);
 
             // check if line is longer than 1/3 of boxlength (we do not want this to
             // ensure that our RVE stays representative)
-            if (GetEdgeLength(iter_edges) / length_norm_fac > one_third * this->boxsize_[0])
+            if (GetEdgeLength(iter_edges) / length_norm_fac > one_third * this->boxSize_[0])
             {
               success = false;
               break;
@@ -1681,8 +1677,8 @@ public:
           std::vector<unsigned int> nodes_line_1(2, 0);
           std::vector<unsigned int> nodes_line_2(2, 0);
 
-          nodes_line_1[0] = uniqueVertexEdgePartners_[random_line_1][0];
-          nodes_line_1[1] = uniqueVertexEdgePartners_[random_line_1][1];
+          nodes_line_1[0] = edges_[random_line_1][0];
+          nodes_line_1[1] = edges_[random_line_1][1];
 
           unsigned int control_iter = 0;
           while (not_yet_found)
@@ -1696,15 +1692,15 @@ public:
             }
 
             random_line_2 = dis_line(gen);
-            nodes_line_2[0] = uniqueVertexEdgePartners_[random_line_2][0];
-            nodes_line_2[1] = uniqueVertexEdgePartners_[random_line_2][1];
+            nodes_line_2[0] = edges_[random_line_2][0];
+            nodes_line_2[1] = edges_[random_line_2][1];
 
             // already check distance here
             bool to_far_away = false;
             for (unsigned int j = 0; j < 2; ++j)
             {
-              if (l2_norm_dist_two_points(uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[0]]) > one_third * this->boxsize_[0] or
-                  l2_norm_dist_two_points(uniqueVertices_[nodes_line_1[j]], uniqueVertices_[nodes_line_2[1]]) > one_third * this->boxsize_[0])
+              if (l2_norm_dist_two_points(vertices_[nodes_line_1[j]], vertices_[nodes_line_2[0]]) > one_third * this->boxSize_[0] or
+                  l2_norm_dist_two_points(vertices_[nodes_line_1[j]], vertices_[nodes_line_2[1]]) > one_third * this->boxSize_[0])
               {
                 to_far_away = true;
                 break;
@@ -1721,10 +1717,10 @@ public:
           }
 
           std::set<unsigned int> affected_nodes;
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_1][0]);
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_1][1]);
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_2][0]);
-          affected_nodes.insert(uniqueVertexEdgePartners_[random_line_2][1]);
+          affected_nodes.insert(edges_[random_line_1][0]);
+          affected_nodes.insert(edges_[random_line_1][1]);
+          affected_nodes.insert(edges_[random_line_2][0]);
+          affected_nodes.insert(edges_[random_line_2][1]);
 
           std::set<unsigned int> affected_lines;
           affected_lines.insert(random_line_1);
@@ -1738,8 +1734,8 @@ public:
           {
             for (unsigned int k = 0; k < node_to_edges_[nodes_line_1[j]].size(); ++k)
             {
-              nodes_to_nodes_1[j].insert(uniqueVertexEdgePartners_[k][0]);
-              nodes_to_nodes_1[j].insert(uniqueVertexEdgePartners_[k][1]);
+              nodes_to_nodes_1[j].insert(edges_[k][0]);
+              nodes_to_nodes_1[j].insert(edges_[k][1]);
             }
           }
 
@@ -1747,8 +1743,8 @@ public:
           {
             for (unsigned int k = 0; k < node_to_edges_[nodes_line_2[j]].size(); ++k)
             {
-              nodes_to_nodes_2[j].insert(uniqueVertexEdgePartners_[k][0]);
-              nodes_to_nodes_2[j].insert(uniqueVertexEdgePartners_[k][1]);
+              nodes_to_nodes_2[j].insert(edges_[k][0]);
+              nodes_to_nodes_2[j].insert(edges_[k][1]);
             }
           }
 
@@ -1765,8 +1761,8 @@ public:
           // update new connectivity
           if (move_one_sucess == true)
           {
-            this->uniqueVertexEdgePartners_[random_line_1][1] = nodes_line_2[1];
-            this->uniqueVertexEdgePartners_[random_line_2][1] = nodes_line_1[1];
+            this->edges_[random_line_1][1] = nodes_line_2[1];
+            this->edges_[random_line_2][1] = nodes_line_1[1];
           }
 
           if (move_one_sucess == false)
@@ -1779,8 +1775,8 @@ public:
             }
 
             // update new connectivity
-            this->uniqueVertexEdgePartners_[random_line_1][1] = nodes_line_2[0];
-            this->uniqueVertexEdgePartners_[random_line_2][0] = nodes_line_1[1];
+            this->edges_[random_line_1][1] = nodes_line_2[0];
+            this->edges_[random_line_2][0] = nodes_line_1[1];
           }
 
           // update length distribution
@@ -1878,19 +1874,19 @@ public:
   void OutputGeometry()
   {
     std::ofstream partnersOutFile(this->outputPrefix_.string() + "_partners.out");
-    for (auto partner : this->uniqueVertexEdgePartners_)
+    for (auto partner : this->edges_)
     {
       partnersOutFile << partner[0] << " "
                       << partner[1] << std::endl;
     }
     partnersOutFile.close();
     std::ofstream verticesOutFile(this->outputPrefix_.string() + "_vertices.out");
-    for (auto vertexI = 0; vertexI < this->uniqueVertices_.size(); vertexI++)
+    for (auto vertexI = 0; vertexI < this->vertices_.size(); vertexI++)
     {
-      verticesOutFile << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][0]) << " "
-                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][1]) << " "
-                      << boost::lexical_cast<std::string>(this->uniqueVertices_[vertexI][2]) << " "
-                      << this->uniqueVertexOrders_[vertexI] << std::endl;
+      verticesOutFile << boost::lexical_cast<std::string>(this->vertices_[vertexI][0]) << " "
+                      << boost::lexical_cast<std::string>(this->vertices_[vertexI][1]) << " "
+                      << boost::lexical_cast<std::string>(this->vertices_[vertexI][2]) << " "
+                      << this->vertexEdgeCount_[vertexI] << std::endl;
     }
     verticesOutFile.close();
 
@@ -1906,10 +1902,10 @@ public:
 
   void ReadGeometry()
   {
-    this->uniqueVertexEdgePartners_.clear();
-    this->uniqueVertexOrders_.clear();
-    this->uniqueVertices_map_.clear();
-    this->uniqueVertices_.clear();
+    this->edges_.clear();
+    this->vertexEdgeCount_.clear();
+    this->vertices_map_.clear();
+    this->vertices_.clear();
     this->node_to_edges_.clear();
     std::string row;
     std::ifstream verticesFile = std::ifstream(this->inputPrefix_.string() + "_vertices.out");
@@ -1929,12 +1925,12 @@ public:
         if (++i <= 3)
           vertex.push_back(d);
         else if (i > 3)
-          this->uniqueVertexOrders_.push_back(d);
+          this->vertexEdgeCount_.push_back(d);
         else
           throw "Error in voronoi geometry loading.";
-      this->uniqueVertices_.push_back(vertex);
-      if (this->uniqueVertexOrders_[rowI] != 0)
-        this->uniqueVertices_map_.emplace(rowI, vertex);
+      this->vertices_.push_back(vertex);
+      if (this->vertexEdgeCount_[rowI] != 0)
+        this->vertices_map_.emplace(rowI, vertex);
       rowI++;
     }
     std::ifstream partnersFile = std::ifstream(this->inputPrefix_.string() + "_partners.out");
@@ -1950,7 +1946,7 @@ public:
       std::vector<uint> partners;
       while (s >> u)
         partners.push_back(u);
-      this->uniqueVertexEdgePartners_.push_back(partners);
+      this->edges_.push_back(partners);
     }
 
     std::ifstream nodesToEdgesFile = std::ifstream(this->inputPrefix_.string() + "_nodes_to_edges.out");
