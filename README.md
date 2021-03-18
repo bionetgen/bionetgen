@@ -19,6 +19,17 @@ Use the config.json file to set parameters for the algorithm.
 
 The *main* operation mode can be selected by changing the values of *generate* and *simulate* in the config file. If only generate is true, a voronoi geometry will be generated and saved as the output. If simulate is also true, simulated annealing will additionally be performed before the geometry is saved to the output files. If only simulate is true, a previously saved geometry will be read from the input files, simulated annealing will be perfomed and the result will be saved to the output files.
 
+### Publications
+
+Please cite the following paper for acknowledging this software contribution:
+
+@article{eichinger2021,
+  title         = {A computational framework for modeling cell-matrix interactions in soft biological tissues},
+  author        = {Jonas F. Eichinger, Maximilian J. Grill, Roland, C. Aydin, Wolfgang A. Wall, Jay D. Humphrey, Christian J. Cyron},
+  year          = {2021},
+  journal       = {submitted}
+}
+
 ### Parameters
 
 *seed*: The seed for the random number generator (can be any integer number)
@@ -63,7 +74,11 @@ The *main* operation mode can be selected by changing the values of *generate* a
 
 *num-bins-cosine*: Number of bins per cosine (can be any positive integer)
 
-## Acknowledgements
+### License
+
+*bionetgen* is published under the BSD 3-Clause License.
+
+### Acknowledgements
 
 This project uses the library voro++ by Chris Rycroft from University of California, through Lawrence Berkeley National Laboratory, for the generation of the voronoi geometry, which can be downloaded from http://math.lbl.gov/voro%2B%2B/.
 
