@@ -8,9 +8,10 @@ Voronoi network generation algorithm extracted from the input generator
     $ cd build
     $ cmake ..
     $ make
+    $ cd ..
 
 ## Usage
-    $ voronoi config.json
+    $ ./build/voronoi config.json
 
 ## Configuration
 
