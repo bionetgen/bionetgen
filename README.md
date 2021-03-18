@@ -1,6 +1,10 @@
-# Voronoi
+# Bionetgen
 
-Voronoi network generation algorithm extracted from the input generator
+Bionetgen is a brief C++ tool to create fiber networks that follow the fiber length, valency and cosine distribution of actual collagen gels from confocal microscope images. Our algorithm closely follows the approach of [1] using the stochastic optimization method of simulated annealing.
+
+[1] S.B. Lindstrom, D.A. Vader, A. Kulachenko, D.A. Weitz, Biopolymer network geometries: Characterization,
+regeneration, and elastic properties. Phys. Rev. E - Stat. Nonlinear, Soft Matter Phys. 82(5), 2 (2010).
+
 
 ## Building
 
