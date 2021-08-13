@@ -29,9 +29,9 @@ Please cite the following paper for acknowledging this software contribution:
 
 @article{eichinger2021,
   title         = {A computational framework for modeling cell-matrix interactions in soft biological tissues},
-  author        = {Jonas F. Eichinger, Maximilian J. Grill, Roland, C. Aydin, Wolfgang A. Wall, Jay D. Humphrey, Christian J. Cyron},
+  author        = {Jonas F. Eichinger, Maximilian J. Grill, Iman Davoodi-Kermani, Roland C. Aydin, Wolfgang A. Wall, Jay D. Humphrey, Christian J. Cyron},
   year          = {2021},
-  journal       = {submitted}
+  journal       = {Biomechanics and Modeling in Mechanobiology}
 }
 
 ### Parameters
