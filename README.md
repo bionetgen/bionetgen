@@ -27,12 +27,7 @@ The *main* operation mode can be selected by changing the values of *generate* a
 
 Please cite the following paper for acknowledging this software contribution:
 
-@article{eichinger2021,
-  title         = {A computational framework for modeling cell-matrix interactions in soft biological tissues},
-  author        = {Jonas F. Eichinger, Maximilian J. Grill, Iman Davoodi-Kermani, Roland C. Aydin, Wolfgang A. Wall, Jay D. Humphrey, Christian J. Cyron},
-  year          = {2021},
-  journal       = {Biomechanics and Modeling in Mechanobiology}
-}
+Eichinger JF, Grill MJ, Davoodi Kermani I, Aydin RC, Wall WA, Humphrey JD, Cyron CJ, A computational framework for modeling cell-matrix interactions in soft biological tissues. *Biomechanics and Modeling in Mechanobiology*. 2021. doi.org/10.1007/s10237-021-01480-2
 
 ### Parameters
 
