@@ -5,6 +5,9 @@
     "output-prefix": "./output_input_generator/test-file",
     "generate": true,
     "simulate": true,
+    "valency-distribution-type": "valency_Lindstroem2010",
+    "length-distribution-type": "length_Lindstroem2010",
+    "cosine-distribution-type": "cosine_Lindstroem2010",
     "box-size": [
         1,
         1,

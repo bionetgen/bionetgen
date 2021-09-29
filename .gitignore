@@ -1,4 +1,5 @@
 build/
+output_input_generator/
 
 # libvoro++
 voro++-0.4.6/src/*.o
@@ -7,3 +8,4 @@ voro++-0.4.6/src/voro++
 voro++-0.4.6/examples/**/*
 
 .vscode/
+.project

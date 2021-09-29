@@ -43,6 +43,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -53,9 +54,94 @@ const double one_third = 1.0 / 3.0;
 
 class Voronoi
 {
+
+  // @Iman: put here sensible names for the different distributions
+  enum valency_distribution_type {
+    valency_Lindstroem2010,
+    valency_xxx2,
+    valency_xxx3
+  };
+
+  // @Iman: put here sensible names for the different distributions
+  enum length_distribution_type {
+    length_Lindstroem2010,
+    length_xxx2,
+    length_xxx3
+  };
+
+  // @Iman: put here sensible names for the different distributions
+  enum cosine_distribution_type {
+    cosine_Lindstroem2010,
+    cosine_xxx2,
+    cosine_xxx3
+  };
+
+  //! @Iman: adapt the following three functions accordingly
+  inline enum valency_distribution_type String2ValencyDistributionType(const std::string& name)
+  {
+    valency_distribution_type type = valency_distribution_type::valency_Lindstroem2010;
+    if (boost::iequals(name, "valency_Lindstroem2010"))
+      type = valency_Lindstroem2010;
+    else if (boost::iequals(name, "xxx2"))
+      type = valency_distribution_type::valency_xxx2;
+    else if (boost::iequals(name, "xxx3"))
+      type = valency_distribution_type::valency_xxx3;
+    else
+    {
+      std::cout << "Invalid valency distribution type " << std::endl;
+      exit(0);
+    }
+
+    return type;
+  };
+
+
+  inline enum length_distribution_type String2LengthDistributionType(const std::string& name)
+  {
+    length_distribution_type type = length_distribution_type::length_Lindstroem2010;
+    if (boost::iequals(name, "length_Lindstroem2010"))
+      type = length_distribution_type::length_Lindstroem2010;
+    else if (boost::iequals(name, "xxx2"))
+      type = length_distribution_type::length_xxx2;
+    else if (boost::iequals(name, "xxx3"))
+      type = length_distribution_type::length_xxx3;
+    else
+    {
+      std::cout << "Invalid length distribution type " << std::endl;
+      exit(0);
+    }
+
+    return type;
+  };
+
+
+  inline enum cosine_distribution_type String2CosineDistributionType(const std::string& name)
+  {
+    cosine_distribution_type type = cosine_distribution_type::cosine_Lindstroem2010;
+    if (boost::iequals(name, "cosine_Lindstroem2010"))
+      type = cosine_Lindstroem2010;
+    else if (boost::iequals(name, "xxx2"))
+      type = cosine_distribution_type::cosine_xxx2;
+    else if (boost::iequals(name, "xxx3"))
+      type = cosine_distribution_type::cosine_xxx3;
+    else
+    {
+      std::cout << "Invalid cosine distribution type " << std::endl;
+      exit(0);
+    }
+
+    return type;
+  };
+
+
   bool generate_;
   bool simulate_;
   uint mode_;
+
+  valency_distribution_type valency_distribution_type_;
+  length_distribution_type length_distribution_type_;
+  cosine_distribution_type cosine_distribution_type_;
+
   boost::filesystem::path outputPrefix_;
   boost::filesystem::path inputPrefix_;
   std::vector<double> boxSize_;
@@ -116,6 +202,10 @@ public:
 
     this->generate_ = config.get<bool>("generate");
     this->simulate_ = config.get<bool>("simulate");
+
+    this->valency_distribution_type_ = String2ValencyDistributionType(config.get<std::string>("valency-distribution-type"));
+    this->length_distribution_type_ = String2LengthDistributionType(config.get<std::string>("length-distribution-type"));
+    this->cosine_distribution_type_ = String2CosineDistributionType(config.get<std::string>("cosine-distribution-type"));
 
     for (auto child : config.get_child("box-size"))
       this->boxSize_.push_back(child.second.get_value<double>());
@@ -1108,26 +1198,34 @@ public:
   {
     curr_energy_line = 0.0;
 
-    double static mue = -0.3;   // mean
-    double static sigma = 0.68; // standard deviation
-
-    double one_sixth = 1.0 / 6.0;
-    double curr_x = 0.0;
-    double F = 0.0;
-    double M = 0.0;
-    double S = 0.0;
-    for (unsigned int p = 0; p < length_distribution.size(); ++p)
+    if (this->length_distribution_type_ == length_distribution_type::length_Lindstroem2010)
     {
-      curr_x = interval_size_lengths * p + interval_size_lengths * 0.5;
-      F = (0.5 + 0.5 * std::erf((std::log(curr_x) - mue) / (sigma * M_SQRT2)));
-      if (p > 0)
-        M += length_distribution[p - 1];
-      S = M - num_lines * F - 0.5;
-      curr_energy_line += length_distribution[p] * (one_sixth * (length_distribution[p] + 1.0) *
-                                                        (6.0 * S + 2.0 * length_distribution[p] + 1.0) +
-                                                    S * S);
+      double static mue = -0.3;   // mean
+      double static sigma = 0.68; // standard deviation
+
+      double one_sixth = 1.0 / 6.0;
+      double curr_x = 0.0;
+      double F = 0.0;
+      double M = 0.0;
+      double S = 0.0;
+      for (unsigned int p = 0; p < length_distribution.size(); ++p)
+      {
+        curr_x = interval_size_lengths * p + interval_size_lengths * 0.5;
+        F = (0.5 + 0.5 * std::erf((std::log(curr_x) - mue) / (sigma * M_SQRT2)));
+        if (p > 0)
+          M += length_distribution[p - 1];
+        S = M - num_lines * F - 0.5;
+        curr_energy_line += length_distribution[p] * (one_sixth * (length_distribution[p] + 1.0) *
+                                                          (6.0 * S + 2.0 * length_distribution[p] + 1.0) +
+                                                      S * S);
+      }
+      curr_energy_line *= 1.0 / (num_lines * num_lines);
     }
-    curr_energy_line *= 1.0 / (num_lines * num_lines);
+    else if (this->length_distribution_type_ == length_distribution_type::length_xxx2)
+    {
+      //@Iman: implement in this manner all other length distributions you want to use
+    }
+
   }
 
   void EnergyCosineLindstrom(
@@ -1138,30 +1236,39 @@ public:
   {
     curr_energy_cosine = 0.0;
 
-    double static b_1 = 0.646666666666667 / 2.0;
-    double static b_2 = -0.126666666666667 / 4.0;
-    double static b_3 = 0.0200000000000001 / 6.0;
-
-    double one_sixth = 1.0 / 6.0;
-    double power_2 = 0.0;
-    double curr_x = 0.0;
-    double F = 0.0;
-    double M = 0.0;
-    double S = 0.0;
-    for (unsigned int p = 0; p < cosine_distribution.size(); ++p)
+    if (this->cosine_distribution_type_ == valency_distribution_type::valency_Lindstroem2010)
     {
-      curr_x = interval_size_cosines * p + interval_size_cosines * 0.5 - 1.0;
-      power_2 = (1.0 - curr_x) * (1.0 - curr_x);
-      F = -1.0 * b_1 * power_2 - b_2 * power_2 * power_2 - b_3 * power_2 * power_2 * power_2 + 1.0;
-      if (p > 0)
-        M += cosine_distribution[p - 1];
-      S = M - num_cosines * F - 0.5;
-      curr_energy_cosine += cosine_distribution[p] * (one_sixth * (cosine_distribution[p] + 1.0) *
-                                                          (6.0 * S + 2.0 * cosine_distribution[p] + 1.0) +
-                                                      S * S);
+      double static b_1 = 0.646666666666667 / 2.0;
+      double static b_2 = -0.126666666666667 / 4.0;
+      double static b_3 = 0.0200000000000001 / 6.0;
+
+      double one_sixth = 1.0 / 6.0;
+      double power_2 = 0.0;
+      double curr_x = 0.0;
+      double F = 0.0;
+      double M = 0.0;
+      double S = 0.0;
+      for (unsigned int p = 0; p < cosine_distribution.size(); ++p)
+      {
+        curr_x = interval_size_cosines * p + interval_size_cosines * 0.5 - 1.0;
+        power_2 = (1.0 - curr_x) * (1.0 - curr_x);
+        F = -1.0 * b_1 * power_2 - b_2 * power_2 * power_2 - b_3 * power_2 * power_2 * power_2 + 1.0;
+        if (p > 0)
+          M += cosine_distribution[p - 1];
+        S = M - num_cosines * F - 0.5;
+        curr_energy_cosine += cosine_distribution[p] * (one_sixth * (cosine_distribution[p] + 1.0) *
+                                                            (6.0 * S + 2.0 * cosine_distribution[p] + 1.0) +
+                                                        S * S);
+      }
+
+      curr_energy_cosine *= 1.0 / (num_cosines * num_cosines);
+    }
+    else if (this->cosine_distribution_type_ == valency_distribution_type::valency_xxx2)
+    {
+      //@Iman: implement in this manner all other cosine distributions you want to use
     }
 
-    curr_energy_cosine *= 1.0 / (num_cosines * num_cosines);
+
   }
 
   void RemoveDoubles()
@@ -1299,10 +1406,28 @@ public:
     std::vector<double> dir_1(3, 0.0);
     std::vector<double> dir_2(3, 0.0);
 
-    unsigned int num_z_3 = std::floor(0.72 * num_nodes);
-    unsigned int num_z_4 = std::floor(0.2 * num_nodes);
-    unsigned int num_z_5 = std::floor(0.054 * num_nodes);
-    unsigned int num_z_6 = std::floor(0.011 * num_nodes);
+    unsigned int num_z_3 = 0;
+    unsigned int num_z_4 = 0;
+    unsigned int num_z_5 = 0;
+    unsigned int num_z_6 = 0;
+
+    if (this->valency_distribution_type_ == valency_distribution_type::valency_Lindstroem2010)
+    {
+      num_z_3 = std::floor(0.72 * num_nodes);
+      num_z_4 = std::floor(0.2 * num_nodes);
+      num_z_5 = std::floor(0.054 * num_nodes);
+      num_z_6 = std::floor(0.011 * num_nodes);
+    }
+    else if (this->valency_distribution_type_ == valency_distribution_type::valency_xxx2)
+    {
+      // @Iman: convert your cosine distribution to percentage (fill in 0.xx)
+      // i.e. if 68% of all nodes have valency 3: num_z_3 = std::floor(0.68 * num_nodes);
+      // outcomment the following lines and adapt them
+//      num_z_3 = std::floor(0.xx * num_nodes);
+//      num_z_4 = std::floor(0.xx * num_nodes);
+//      num_z_5 = std::floor(0.xx * num_nodes);
+//      num_z_6 = std::floor(0.xx * num_nodes);
+    }
 
     num_z_4 += num_nodes - (num_z_3 + num_z_4 + num_z_5 + num_z_6);
 
