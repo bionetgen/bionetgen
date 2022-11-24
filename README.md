@@ -38,8 +38,10 @@ cd build
 cmake .. -DCMAKE_EXE_LINKER_FLAGS="-static"
 cmake --build .
 
-# check voronoi.exe exists
-stat voronoi.exe
+# check voronoi.exe exists, and that it only depends on Windows libraries
+#
+# (i.e. every library it lists should be in /C/Windows)
+ldd voronoi.exe
 ```
 
 ## Usage
