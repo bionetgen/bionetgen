@@ -36,11 +36,11 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <random>
 #include <chrono>
 #include <map>
 #include <set>
-#include <boost/filesystem.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/lexical_cast.hpp>
@@ -50,14 +50,15 @@
 // #include "../lib/lib_vec.hpp"
 
 const double one_third = 1.0 / 3.0;
+using uint = unsigned;
 
 class Voronoi
 {
   bool generate_;
   bool simulate_;
   uint mode_;
-  boost::filesystem::path outputPrefix_;
-  boost::filesystem::path inputPrefix_;
+  std::filesystem::path outputPrefix_;
+  std::filesystem::path inputPrefix_;
   std::vector<double> boxSize_;
   std::vector<double> boxOrigin_;
   double seed_;
@@ -100,16 +101,16 @@ class Voronoi
   unsigned int p_num_bins_cosines;
 
 public:
-  void configure(boost::filesystem::path config_path, boost::property_tree::ptree config)
+  void configure(std::filesystem::path config_path, boost::property_tree::ptree config)
   {
-    this->outputPrefix_ = boost::filesystem::path(config_path) / boost::filesystem::path(config.get<std::string>("output-prefix"));
+    this->outputPrefix_ = std::filesystem::path(config_path) / std::filesystem::path(config.get<std::string>("output-prefix"));
     if (this->outputPrefix_.has_parent_path())
-      if (!boost::filesystem::exists(this->outputPrefix_.parent_path()))
-        boost::filesystem::create_directory(this->outputPrefix_.parent_path());
-    this->inputPrefix_ = boost::filesystem::path(config_path) / boost::filesystem::path(config.get<std::string>("input-prefix"));
+      if (!std::filesystem::exists(this->outputPrefix_.parent_path()))
+        std::filesystem::create_directory(this->outputPrefix_.parent_path());
+    this->inputPrefix_ = std::filesystem::path(config_path) / std::filesystem::path(config.get<std::string>("input-prefix"));
     if (this->inputPrefix_.has_parent_path())
-      if (!boost::filesystem::exists(this->inputPrefix_.parent_path()))
-        boost::filesystem::create_directory(this->inputPrefix_.parent_path());
+      if (!std::filesystem::exists(this->inputPrefix_.parent_path()))
+        std::filesystem::create_directory(this->inputPrefix_.parent_path());
 
     this->seed_ = config.get<double>("seed");
     this->voronoiParticleCount_ = config.get<uint>("particles");

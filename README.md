@@ -14,6 +14,23 @@ regeneration, and elastic properties. Phys. Rev. E - Stat. Nonlinear, Soft Matte
     $ make
     $ cd ..
 
+## Building on Windows
+
+- Clone this repository somewhere (e.g. `git clone https://github.com/bionetgen/bionetgen /C/Users/user/Desktop/bionetgen`)
+- Install [MSYS2](https://www.msys2.org/)
+  - This gives access to a Linux-like toolchains (i.e. `make`, `perl`, and `boost`)
+- Boot into an `MSYS2_MinGW64` terminal
+  - Note: the reason this guide uses MinGW64 under MSYS2 is because MSYS2 is more regularly updated than MinGW, but MinGW can be used to create standalone binaries
+- Install `cmake`, `make`, `gcc`, `g++`, and `boost`
+  - e.g. `pacman -S mingw-w64-x86_64-cmake make mingw-w64-x86_64-gcc mingw-w64-x86_64-boost`
+- Switch to the cloned repository (e.g. `cd /C/Users/user/Desktop/bionetgen`)
+- Build a `voroni.exe` with static linking, so it can be used on any Windows computer, with:
+
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_EXE_LINKER_FLAGS="-static"
+    cmake --build .
+
 ## Usage
     $ ./build/voronoi config.json
 
