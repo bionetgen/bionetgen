@@ -16,20 +16,31 @@ regeneration, and elastic properties. Phys. Rev. E - Stat. Nonlinear, Soft Matte
 
 ## Building on Windows
 
-- Clone this repository somewhere (e.g. `git clone https://github.com/bionetgen/bionetgen /C/Users/user/Desktop/bionetgen`)
-- Install [MSYS2](https://www.msys2.org/)
-  - This gives access to a Linux-like toolchains (i.e. `make`, `perl`, and `boost`)
-- Boot into an `MSYS2_MinGW64` terminal
-  - Note: the reason this guide uses MinGW64 under MSYS2 is because MSYS2 is more regularly updated than MinGW, but MinGW can be used to create standalone binaries
-- Install `cmake`, `make`, `gcc`, `g++`, and `boost`
-  - e.g. `pacman -S mingw-w64-x86_64-cmake make mingw-w64-x86_64-gcc mingw-w64-x86_64-boost`
-- Switch to the cloned repository (e.g. `cd /C/Users/user/Desktop/bionetgen`)
-- Build a `voroni.exe` with static linking, so it can be used on any Windows computer, with:
+These build instructions use the MinGW64 part of [MSYS2](https://www.msys2.org/), which provides the necessary tools (i.e. `cmake`, `make`, `g++`, and `boost`). It generates a standalone executable that only depends on Windows' core libraries.
 
-    mkdir build
-    cd build
-    cmake .. -DCMAKE_EXE_LINKER_FLAGS="-static"
-    cmake --build .
+The reason this guide uses MinGW64 under MSYS2, despite MSYS2 generally being considered to be more modern, is because MinGW can be used to create standalone executables that ultimately do not depend on either MSYS2 or MinGW64 to run them.
+
+- Install [MSYS2](https://www.msys2.org/)
+- Clone this repository onto your computer
+- Boot into an `MSYS2_MinGW64` terminal
+- Go through these commands:
+
+```bash
+# install `cmake`, `make`, `gcc`, `g++`, and `boost`
+pacman -S mingw-w64-x86_64-cmake make mingw-w64-x86_64-gcc mingw-w64-x86_64-boost
+
+# change to the cloned repository
+cd /C/Users/user/Desktop/bionetgen
+
+# build with static linking
+mkdir build
+cd build
+cmake .. -DCMAKE_EXE_LINKER_FLAGS="-static"
+cmake --build .
+
+# check voronoi.exe exists
+stat voronoi.exe
+```
 
 ## Usage
     $ ./build/voronoi config.json
