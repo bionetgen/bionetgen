@@ -42,6 +42,7 @@ enable_testing()
 set(CMAKE_BUILD_DIRECTORY build)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 file(GLOB Voropp_SRC_DIRS "voro++-0.4.6/src")
 find_package(Boost COMPONENTS math_c99l REQUIRED)
 
