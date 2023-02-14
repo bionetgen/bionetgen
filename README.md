@@ -63,7 +63,13 @@ ldd voronoi.exe
 
 #### Developing on Windows (Visual Studio 2022)
 
-- Confirm you can build `voronoi.exe` manually using MSYS etc. (above)
+- Confirm you can build `voronoi.exe` manually using MSYS2 etc. (above)
+- Install a debugger (`gdb`) in your MSYS2 terminal:
+
+```bash
+pacman -S mingw-w64-x86_64-gdb
+```
+
 - In Visual Studio 2022, open `bionetgen` as a folder project ("Open as Local Folder" from the splash screen)
 - Visual Studio should detect that it's a CMake project and suggest `Open CMake Settings Editor`
 - Open the CMake settings editor and save `Ctrl+S`, which should create a `CMakeSettings.json` file
@@ -80,42 +86,38 @@ ldd voronoi.exe
           "BIN_ROOT": "${env.MINGW64_ROOT}/bin",
           "FLAVOR": "x86_64-w64-mingw32",
           "TOOLSET_VERSION": "12.2.0",
-          "INCLUDE": "${env.MINGW64_ROOT}/include;${env.MINGW64_ROOT}/include/c++/${env.TOOLSET_VERSION};${env.MINGW64_ROOT}/include/c++/${env.TOOLSET_VERSION}/tr1;${env.MINGW64_ROOT}/include/c++/${env.TOOLSET_VERSION}/${env.FLAVOR}",
+          "INCLUDE": "${env.MINGW64_ROOT}/include/c++/${env.TOOLSET_VERSION};${env.MINGW64_ROOT}/include/c++/${env.TOOLSET_VERSION}/${env.FLAVOR};${env.MINGW64_ROOT}/include/c++/${env.TOOLSET_VERSION}/backward;${env.MINGW64_ROOT}/lib/gcc/${env.FLAVOR}/${env.TOOLSET_VERSION}/include;${env.MINGW64_ROOT}/lib/gcc/${env.FLAVOR}/${env.TOOLSET_VERSION}/include-fixed;${env.MINGW64_ROOT}/include",
           "MINGW_PREFIX": "C:/msys64/mingw64",
           "MINGW_CHOST": "x86_64-w64-mingw32",
           "MINGW_PACKAGE_PREFIX": "mingw-w64-x86_64",
           "MSYSTEM": "MINGW64",
           "MSYSTEM_CARCH": "x64_64",
-          "MSYSTEM_PREFIX": "C:/msys64/mingw64",
+          "MSYSTEM_PREFIX": "${env.MINGW64_ROOT}",
           "MSYSTEM_CHOST": "x86_64-w64-mingw32",
           "SHELL": "${env.MINGW_PREFIX}/../usr/bin/bash",
           "TEMP": "${env.MINGW_PREFIX}/../tmp",
           "TMP": "${env.TEMP}",
           "PATH": "${env.MINGW_PREFIX}/bin;${env.MINGW_PREFIX}/../usr/local/bin;${env.MINGW_PREFIX}/../usr/bin;${env.MINGW_PREFIX}/../bin;${env.PATH}",
-          "environment": "mingw_64"
+          "environment": "mingw_64_custom"
         }
       ],
       "name": "Mingw64-Debug",
       "generator": "Ninja",
       "configurationType": "Debug",
-      "inheritEnvironments": [
-        "mingw_64",
-        "msvc_x64_x64"
-      ],
-      "buildRoot": "${env.USERPROFILE}\\CMakeBuilds\\${workspaceHash}\\build\\${name}",
-      "installRoot": "${env.USERPROFILE}\\CMakeBuilds\\${workspaceHash}\\install\\${name}",
+      "inheritEnvironments": [ "mingw_64_custom" ],
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
-      "intelliSenseMode": "linux-gcc-x64",
       "variables": [
         {
           "name": "CMAKE_C_COMPILER",
-          "value": "${env.BIN_ROOT}/gcc.exe"
+          "value": "${env.BIN_ROOT}/gcc.exe",
+          "type": "STRING"
         },
         {
           "name": "CMAKE_CXX_COMPILER",
-          "value": "${env.BIN_ROOT}/g++.exe"
+          "value": "${env.BIN_ROOT}/g++.exe",
+          "type": "STRING"
         }
       ]
     }
@@ -140,10 +142,18 @@ ldd voronoi.exe
   to build `voronoi.exe` and (e.g.) `F5` to build+debug `voronoi.exe`
 
 - If you want to run `voronoi.exe` with arguments (e.g. a file, input configuration, etc.)
-  then you will need to tell Visual Studio which arguments to use. Here's a guide:
-  https://stackoverflow.com/questions/30104520/adding-command-line-arguments-to-project
+  then you will need to tell Visual Studio which arguments to use.
 
-- (example of `launch.vs.json` making the run command provide an argument):
+  - Stackoverflow guide: https://stackoverflow.com/questions/30104520/adding-command-line-arguments-to-project
+  - Microsoft guide: https://devblogs.microsoft.com/cppblog/using-mingw-and-cygwin-with-visual-cpp-and-open-folder/
+  - Build environments: https://learn.microsoft.com/en-us/cpp/build/cmake-predefined-configuration-reference?view=msvc-170
+
+- Effectively, you need to right-click `CMakeLists.txt` then `Add Debug Configuration`. You might
+  get lucky and find that Visual Studio suggests "Run with debugger mingw64", which will generate
+  a mostly-correct configuration. Otherwise, you may need to `Open Debug and Launch Settings`
+  to open the JSON followed by writing the appropriate JSON. Here is what worked for me. It generates
+  a `voronoi.exe` startup target *and* a `voronoi.exe (gdb)` target that attaches a debugger to the
+  program when it boots:
 
 ```json
 {
@@ -154,8 +164,20 @@ ldd voronoi.exe
       "type": "default",
       "project": "CMakeLists.txt",
       "projectTarget": "voronoi.exe",
-      "name": "voronoi.exee",
-      "args": ["C:\\some\\path\\to\\config.json"]
+      "name": "voronoi.exe",
+      "args": [ "C:\\some\\path\\to\\config.json" ]
+    },
+    {
+      "type": "cppdbg",
+      "project": "CMakeLists.txt",
+      "projectTarget": "voronoi.exe",
+      "cwd": "${workspaceRoot}",
+      "program": "${debugInfo.target}",
+      "name": "voronoi.exe (gdb)",
+      "args": [ "C:\\some\\path\\to\\config.json" ],
+      "MIMode": "gdb",
+      "miDebuggerPath": "C:\\msys64\\mingw64\\bin\\gdb.exe",
+      "externalConsole": true
     }
   ]
 }
