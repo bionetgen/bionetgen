@@ -41,11 +41,12 @@ enable_testing()
 
 set(CMAKE_BUILD_DIRECTORY build)
 
-set (CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 file(GLOB Voropp_SRC_DIRS "voro++-0.4.6/src")
-file(GLOB Boost_LIB_DIRS "/lnm/lib/Q1_2015/boost/lib")
+find_package(Boost COMPONENTS math_c99l REQUIRED)
 
-link_directories(${Boost_LIB_DIRS} ${Voropp_SRC_DIRS})
+link_directories(${Voropp_SRC_DIRS})
 
 file(GLOB SOURCES "src/*.cpp")
 add_executable(voronoi ${SOURCES})
@@ -55,7 +56,8 @@ add_custom_target(
    COMMAND make -C ${CMAKE_CURRENT_SOURCE_DIR}/voro++-0.4.6/
 )
 
-target_link_libraries(voronoi boost_math_c99l boost_filesystem boost_system voro++)
+target_link_libraries(voronoi Boost::math_c99l voro++)
+target_include_directories(voronoi PUBLIC ${Boost_INCLUDE_DIRS})
 add_dependencies(voronoi voropp)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
