@@ -1110,7 +1110,7 @@ public:
     curr_energy_line = 0.0;
 
     double static mue = -0.3;   // mean
-    double static sigma = 0.68; // standard deviation
+    double static sigma = 0.6008; // standard deviation
 
     double one_sixth = 1.0 / 6.0;
     double curr_x = 0.0;
